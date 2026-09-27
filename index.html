@@ -1,0 +1,1573 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Plainpaper — resume builder</title>
+<meta name="description" content="Build a clean, ATS-friendly resume in your browser. Import an old resume, edit, and download as Word or PDF.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M6 3h14l6 6v20H6z' fill='%23fff' stroke='%2317202B' stroke-width='2'/><path d='M20 3v6h6' fill='none' stroke='%2317202B' stroke-width='2'/><path d='M10 15h12M10 19h12M10 23h8' stroke='%2324558A' stroke-width='2'/></svg>">
+<style>
+:root{
+  --desk:#D9E0E7;
+  --panel:#F6F8FA;
+  --ink:#17202B;
+  --muted:#5B6878;
+  --line:#C3CDD8;
+  --pen:#24558A;
+  --pen-soft:#E3ECF6;
+  --mark:#FFE07A;
+  --danger:#A63A2B;
+  --ok:#2E6B46;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;display:flex;flex-direction:column;
+  font-family:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:15px;line-height:1.5;color:var(--ink);background:var(--desk);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+:focus-visible{outline:2px solid var(--pen);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* ---------- top bar ---------- */
+.bar{display:flex;align-items:center;gap:10px;padding:10px 20px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:20px;letter-spacing:-.015em;margin-right:auto}
+.brand svg{width:26px;height:26px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;background:#fff;padding:2px}
+.seg label{position:relative;cursor:pointer}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:block;padding:6px 12px;border-radius:6px;font-size:14px;font-weight:600;color:var(--muted)}
+.seg input:checked+span{background:var(--ink);color:#fff}
+.seg input:focus-visible+span{outline:2px solid var(--pen);outline-offset:1px}
+
+.btn{appearance:none;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-weight:600;font-size:14px;line-height:1.2;padding:8px 13px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;text-decoration:none}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--pen);border-color:var(--pen);color:#fff}
+.btn.primary:hover{background:#1C4470}
+.btn.ai{background:var(--mark);border-color:#E3C24A}
+.btn.ai:hover{border-color:#8C7414}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.ghost:hover{color:var(--ink);background:#fff;border-color:var(--line)}
+.btn.small{font-size:13px;padding:5px 9px}
+.btn.danger{color:var(--danger)}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.btn[aria-busy="true"]{cursor:progress}
+.btn svg{width:16px;height:16px;flex:none}
+.dot{width:8px;height:8px;border-radius:50%;background:#A9B3BF}
+.dot.on{background:#3E9A62}
+
+.menu{position:relative}
+.menu>summary{list-style:none}
+.menu>summary::-webkit-details-marker{display:none}
+.menu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:30;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px;min-width:210px;box-shadow:0 10px 30px -10px rgba(23,32,43,.35)}
+.menu-pop button{display:block;width:100%;text-align:left;border:0;background:none;font:inherit;font-size:14px;padding:8px 10px;border-radius:6px;cursor:pointer;color:var(--ink)}
+.menu-pop button:hover{background:var(--pen-soft)}
+.menu-pop hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+
+/* ---------- layout ---------- */
+.layout{flex:1;min-height:0;display:grid;grid-template-columns:minmax(360px,540px) 1fr}
+.editor{overflow:auto;background:var(--panel);border-right:1px solid var(--line)}
+.preview{overflow:auto;padding:28px 32px 48px;display:flex;flex-direction:column;align-items:center}
+
+.start{margin:20px 24px 4px;padding:16px 18px;border:1.5px dashed #9FB0C2;border-radius:10px;background:#fff;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.start p{margin:0;max-width:34ch;color:var(--muted);font-size:14px}
+.start strong{display:block;color:var(--ink);font-size:15px}
+
+.sec{padding:20px 24px;border-bottom:1px solid var(--line)}
+.sec:last-child{border-bottom:0}
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.sec h2{font-size:17px;margin:0;letter-spacing:-.01em}
+.hint{font-size:13px;color:var(--muted);font-weight:400}
+
+label.f{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:10px}
+input[type=text],input[type=email],input[type=tel],input[type=password],textarea,select{
+  display:block;width:100%;margin-top:4px;font:inherit;font-size:15px;color:var(--ink);background:#fff;
+  border:1px solid var(--line);border-radius:6px;padding:8px 10px;
+}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--pen);box-shadow:0 0 0 3px var(--pen-soft)}
+input:disabled{background:#EEF1F4;color:var(--muted)}
+textarea{resize:vertical;min-height:84px;line-height:1.45}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.grid3{display:grid;grid-template-columns:2fr 1fr;gap:0 12px}
+.check{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:var(--ink);cursor:pointer}
+.check input{width:16px;height:16px;margin:0;accent-color:var(--pen)}
+
+.item{border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:10px}
+.item>summary{list-style:none;cursor:pointer;padding:11px 14px;display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.item>summary::-webkit-details-marker{display:none}
+.item-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item-title.empty{color:var(--muted);font-weight:500}
+.item-dates{font-size:13px;color:var(--muted);white-space:nowrap}
+.item[open]>summary{border-bottom:1px solid #E2E7ED}
+.item-body{padding:12px 14px 12px}
+.item-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.item-actions .spacer{flex:1}
+.empty-note{font-size:14px;color:var(--muted);margin:0 0 10px}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:6px;border:1px solid var(--line);border-radius:6px;background:#fff;min-height:44px;align-items:center}
+.chips:focus-within{border-color:var(--pen);box-shadow:0 0 0 3px var(--pen-soft)}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--pen-soft);color:#173A5F;border-radius:5px;padding:3px 4px 3px 9px;font-size:14px;font-weight:500}
+.chip button{border:0;background:none;cursor:pointer;color:inherit;font-size:16px;line-height:1;padding:0 4px;border-radius:4px}
+.chip button:hover{background:rgba(23,32,43,.1)}
+.chips input{flex:1;min-width:140px;border:0;margin:0;padding:4px;box-shadow:none!important}
+.suggest{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.suggest button{border:1px dashed #A48E2E;background:#FFF7D6;border-radius:5px;font:inherit;font-size:13px;padding:3px 9px;cursor:pointer}
+.suggest button:hover{background:var(--mark)}
+
+/* ---------- paper ---------- */
+.paper-frame{width:100%;max-width:880px;position:relative}
+.paper-scale{transform-origin:top left;width:210mm}
+.paper{width:210mm;min-height:297mm;background:#fff;padding:18mm;box-shadow:0 1px 2px rgba(23,32,43,.10),0 18px 40px -12px rgba(23,32,43,.35)}
+.paper-meta{margin-top:14px;font-size:13px;color:var(--muted)}
+
+/* ---------- resume output: plain, single column, ATS-safe ---------- */
+.resume{color:#000;word-wrap:break-word}
+.resume h1,.resume h2,.resume p,.resume ul{margin:0}
+.resume li{margin:1pt 0}
+.resume .r-ph{color:#B3BAC3}
+
+/* ---------- ATS check panel ---------- */
+.ats{width:100%;max-width:880px;margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px}
+.ats-head{margin:0;font-weight:700;display:flex;align-items:center;gap:8px}
+.ats-head .dot{width:10px;height:10px}
+.ats p.hint{margin:4px 0 0}
+.ats ul{margin:8px 0 0;padding-left:20px;font-size:14px}
+.ats li{margin:3px 0}
+
+/* ---------- dialogs ---------- */
+dialog{border:0;border-radius:12px;padding:0;width:min(560px,calc(100vw - 32px));color:var(--ink);box-shadow:0 30px 60px -20px rgba(23,32,43,.5)}
+dialog::backdrop{background:rgba(23,32,43,.45)}
+.dlg-head{padding:18px 22px 4px}
+.dlg-head h2{margin:0;font-size:19px;letter-spacing:-.01em}
+.dlg-body{padding:10px 22px 6px;max-height:min(65vh,560px);overflow:auto}
+.dlg-body p{margin:0 0 12px}
+.dlg-foot{display:flex;gap:8px;justify-content:flex-end;padding:14px 22px 18px;flex-wrap:wrap}
+.dlg-foot .left{margin-right:auto}
+.row{display:flex;gap:8px;align-items:flex-end}
+.row>label{flex:1;margin-bottom:0}
+.status{font-size:14px;margin:10px 0 0;color:var(--muted);min-height:1.5em}
+.status.err{color:var(--danger)}
+.status.ok{color:var(--ok)}
+.note{font-size:13px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:12px}
+.note a{color:var(--pen)}
+
+.drop{display:block;border:1.5px dashed #9FB0C2;border-radius:10px;padding:26px 16px;text-align:center;cursor:pointer;background:var(--panel)}
+.drop:hover,.drop.over{border-color:var(--pen);background:var(--pen-soft)}
+.drop strong{display:block;font-size:16px}
+.drop span{font-size:13px;color:var(--muted)}
+.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.found{border:1px solid var(--line);border-radius:8px;margin:10px 0 14px}
+.found .check{padding:9px 12px;border-bottom:1px solid #E7EBF0;align-items:flex-start}
+.found .check:last-child{border-bottom:0}
+.found .check input{margin-top:3px}
+.found small{display:block;color:var(--muted);font-size:13px}
+.radios{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.found-title{font-size:14px;font-weight:700;margin:14px 0 0}
+
+.spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;display:inline-block;vertical-align:-3px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;background:var(--ink);color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:500;z-index:100;transition:opacity .2s,transform .2s;pointer-events:none;max-width:calc(100vw - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.err{background:var(--danger)}
+
+.mobile-tabs{display:none}
+
+@media (max-width:900px){
+  .bar{padding:10px 14px}
+  .layout{grid-template-columns:1fr}
+  .editor,.preview{display:none}
+  body[data-view="edit"] .editor{display:block;border-right:0}
+  body[data-view="preview"] .preview{display:flex;padding:16px 12px 32px}
+  .mobile-tabs{display:flex;gap:4px;padding:6px;background:var(--panel);border-top:1px solid var(--line)}
+  .mobile-tabs button{flex:1;border:0;background:none;font:inherit;font-weight:600;padding:9px;border-radius:7px;color:var(--muted);cursor:pointer}
+  .mobile-tabs button[aria-pressed="true"]{background:var(--ink);color:#fff}
+  .hide-sm{display:none}
+}
+@media (max-width:480px){
+  .grid2{grid-template-columns:1fr}
+  .sec,.start{padding-left:16px;padding-right:16px}
+  .start{margin-left:16px;margin-right:16px}
+}
+@media (prefers-reduced-motion:reduce){
+  .toast{transition:none}
+  .spinner{animation-duration:2s}
+}
+
+</style>
+</head>
+<body data-view="edit">
+
+<header class="bar">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 3h14l6 6v20H6z" fill="#fff" stroke="#17202B" stroke-width="2"/><path d="M20 3v6h6" fill="none" stroke="#17202B" stroke-width="2"/><path d="M10 15h12M10 19h12M10 23h8" stroke="#24558A" stroke-width="2"/></svg>
+    Plainpaper
+  </div>
+
+  <div class="seg" role="radiogroup" aria-label="Template">
+    <label title="Arial, standard spacing"><input type="radio" name="tpl" value="standard"><span>Standard</span></label>
+    <label title="Times New Roman, standard spacing"><input type="radio" name="tpl" value="traditional"><span>Traditional</span></label>
+    <label title="Arial, tighter spacing to fit more on a page"><input type="radio" name="tpl" value="compact"><span>Compact</span></label>
+  </div>
+
+  <button class="btn" id="btnAi" type="button" title="Gemini settings">
+    <span class="dot" id="aiDot"></span><span id="aiLabel">Set up AI</span>
+  </button>
+  <button class="btn" id="btnDocx" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>
+    Word
+  </button>
+  <button class="btn primary" id="btnPdf" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>
+    PDF
+  </button>
+  <details class="menu" id="moreMenu">
+    <summary class="btn ghost" aria-label="More options">
+      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+    </summary>
+    <div class="menu-pop">
+      <button type="button" data-act="import">Import an old resume</button>
+      <hr>
+      <button type="button" data-act="backup">Save a backup (.json)</button>
+      <button type="button" data-act="restore">Open a backup</button>
+      <hr>
+      <button type="button" data-act="clear" style="color:var(--danger)">Start over</button>
+    </div>
+  </details>
+</header>
+
+<main class="layout">
+  <!-- ================= EDITOR ================= -->
+  <section class="editor" aria-label="Resume editor">
+    <div class="start">
+      <p><strong>Start from an old resume</strong>Upload a PDF, Word file or photo and Gemini pulls out your details and work history.</p>
+      <button class="btn ai" type="button" id="btnImport">Import resume</button>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Your details</h2></div>
+      <label class="f">Full name<input type="text" data-field="name" autocomplete="name"></label>
+      <div class="grid2">
+        <label class="f">Phone<input type="tel" data-field="phone" autocomplete="tel"></label>
+        <label class="f">Email<input type="email" data-field="email" autocomplete="email"></label>
+      </div>
+      <div class="grid3">
+        <label class="f">Suburb or town<input type="text" data-field="suburb" autocomplete="address-level2"></label>
+        <label class="f">State
+          <select data-field="state">
+            <option value=""></option>
+            <option>WA</option><option>NSW</option><option>VIC</option><option>QLD</option>
+            <option>SA</option><option>TAS</option><option>ACT</option><option>NT</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head">
+        <h2>Summary</h2>
+        <button class="btn ai small" type="button" id="btnSummary">Write with AI</button>
+      </div>
+      <label class="f"><span class="hint">Two to four sentences on who you are and what you're after.</span>
+        <textarea data-field="summary" rows="4"></textarea>
+      </label>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head">
+        <h2>Work history</h2>
+        <button class="btn small" type="button" id="btnAddJob">Add job</button>
+      </div>
+      <p class="empty-note" id="jobsEmpty">No jobs yet. Add one, or import an old resume to fill this in.</p>
+      <div id="jobs"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head">
+        <h2>Education and licences</h2>
+        <button class="btn small" type="button" id="btnAddEdu">Add</button>
+      </div>
+      <p class="empty-note" id="eduEmpty">Optional. Tickets, certificates, licences and qualifications go here.</p>
+      <div id="edu"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head">
+        <h2>Skills</h2>
+        <button class="btn ai small" type="button" id="btnSkills">Suggest with AI</button>
+      </div>
+      <div class="chips" id="chips">
+        <input type="text" id="skillInput" placeholder="Type a skill and press Enter" aria-label="Add a skill">
+      </div>
+      <div class="suggest" id="skillSuggest"></div>
+    </div>
+  </section>
+
+  <!-- ================= PREVIEW ================= -->
+  <section class="preview" aria-label="Resume preview">
+    <div class="paper-frame" id="paperFrame">
+      <div class="paper-scale" id="paperScale">
+        <div class="paper"><div class="resume" id="resume"></div></div>
+      </div>
+    </div>
+    <div class="paper-meta" id="paperMeta">A4</div>
+    <div class="ats" id="ats" aria-live="polite">
+      <p class="ats-head"><span class="dot" id="atsDot"></span><span id="atsTitle">ATS check</span></p>
+      <p class="hint" id="atsNote"></p>
+      <ul id="atsList"></ul>
+    </div>
+  </section>
+</main>
+
+<nav class="mobile-tabs" aria-label="View">
+  <button type="button" data-view="edit" aria-pressed="true">Edit</button>
+  <button type="button" data-view="preview" aria-pressed="false">Preview</button>
+</nav>
+
+<!-- ================= AI SETTINGS ================= -->
+<dialog id="dlgAi" aria-labelledby="aiTitle">
+  <div class="dlg-head"><h2 id="aiTitle">Google Gemini</h2></div>
+  <div class="dlg-body">
+    <p class="hint">AI features use your own Gemini API key. Paste it, load the models it can use, then pick one.</p>
+    <div class="row">
+      <label class="f">API key
+        <input type="password" id="aiKey" autocomplete="off" spellcheck="false" placeholder="AIza…">
+      </label>
+      <button class="btn small" type="button" id="aiShow" style="margin-bottom:3px">Show</button>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn" type="button" id="aiLoad">Load models</button>
+    </div>
+    <label class="f" style="margin-top:14px">Model
+      <select id="aiModel" disabled><option value="">Load models first</option></select>
+    </label>
+    <p class="status" id="aiStatus" role="status"></p>
+    <div class="note">
+      Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>.
+      Your key and chosen model are saved in a cookie in this browser (kept for a year, never shared with other sites) and the key is only ever sent to Google.
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn danger left" type="button" id="aiForget">Remove key</button>
+    <button class="btn" type="button" data-close>Cancel</button>
+    <button class="btn primary" type="button" id="aiSave">Save</button>
+  </div>
+</dialog>
+
+<!-- ================= IMPORT ================= -->
+<dialog id="dlgImport" aria-labelledby="impTitle">
+  <div class="dlg-head"><h2 id="impTitle">Import an old resume</h2></div>
+  <div class="dlg-body">
+    <div id="impNeedsAi" hidden>
+      <p>Importing uses Gemini to read your resume. Add your API key first.</p>
+      <button class="btn ai" type="button" id="impSetup">Set up AI</button>
+    </div>
+
+    <div id="impPick">
+      <label class="drop" id="drop">
+        <input type="file" id="impFile" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/*">
+        <strong>Choose a file or drop it here</strong>
+        <span>PDF, Word (.docx), text, or a photo of a printed resume</span>
+      </label>
+      <p class="status" id="impStatus" role="status"></p>
+    </div>
+
+    <div id="impResults" hidden>
+      <p class="hint" id="impSource"></p>
+
+      <label class="check" style="margin-top:6px"><input type="checkbox" id="impDetails"> <span>Details, summary and skills<small class="hint" id="impDetailsInfo"></small></span></label>
+
+      <p class="found-title" id="impJobsTitle">Jobs found</p>
+      <div class="found" id="impJobs"></div>
+
+      <div id="impEduWrap">
+        <p class="found-title">Education and licences</p>
+        <div class="found">
+          <label class="check"><input type="checkbox" id="impEdu" checked> <span id="impEduInfo"></span></label>
+        </div>
+      </div>
+
+      <p class="found-title">How to add them</p>
+      <div class="radios">
+        <label class="check"><input type="radio" name="impMode" value="add" checked> Add to what's already here</label>
+        <label class="check"><input type="radio" name="impMode" value="replace"> Replace my current jobs and education</label>
+      </div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn left" type="button" id="impAgain" hidden>Choose another file</button>
+    <button class="btn" type="button" data-close>Cancel</button>
+    <button class="btn primary" type="button" id="impApply" hidden>Import selected</button>
+  </div>
+</dialog>
+
+<!-- ================= CONFIRM ================= -->
+<dialog id="dlgConfirm" aria-labelledby="cfTitle">
+  <div class="dlg-head"><h2 id="cfTitle"></h2></div>
+  <div class="dlg-body"><p id="cfText"></p></div>
+  <div class="dlg-foot">
+    <button class="btn" type="button" value="cancel" id="cfCancel">Cancel</button>
+    <button class="btn primary" type="button" value="ok" id="cfOk">OK</button>
+  </div>
+</dialog>
+
+<input type="file" id="restoreFile" accept=".json,application/json" hidden>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ==================================================================
+   Helpers
+   ================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const str = v => (v == null ? '' : String(v)).trim();
+const arr = v => Array.isArray(v) ? v : (v == null || v === '' ? [] : [v]);
+
+const STORE_KEY = 'plainpaper.resume.v1';
+const TPL_KEY = 'plainpaper.template';
+const CK_KEY = 'pp_gemini_key';
+const CK_MODEL = 'pp_gemini_model';
+
+function lsGet(k){ try { return localStorage.getItem(k); } catch { return null; } }
+function lsSet(k, v){ try { localStorage.setItem(k, v); } catch {} }
+
+function setCookie(name, value, days = 365){
+  const exp = new Date(Date.now() + days * 864e5).toUTCString();
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${exp}; Max-Age=${days * 86400}; path=/; SameSite=Strict${secure}`;
+  return getCookie(name) === value; // false if the browser refused it
+}
+
+/* The Gemini key and model live in cookies. Browsers refuse cookies on
+   pages opened straight from disk (file://), so only in that case they
+   fall back to local storage so the app still works while testing. */
+function getSecret(name){ return getCookie(name) || lsGet('pp.' + name) || ''; }
+function setSecret(name, value){
+  if (setCookie(name, value)){ try { localStorage.removeItem('pp.' + name); } catch {} return true; }
+  lsSet('pp.' + name, value); return false;
+}
+function delSecret(name){ delCookie(name); try { localStorage.removeItem('pp.' + name); } catch {} }
+function getCookie(name){
+  const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&') + '=([^;]*)'));
+  return m ? decodeURIComponent(m[1]) : '';
+}
+function delCookie(name){ document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Strict`; }
+
+let toastTimer;
+function toast(msg, isErr = false){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.toggle('err', isErr);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), isErr ? 5200 : 3000);
+}
+
+function busy(btn, on, label = 'Working'){
+  if (!btn) return;
+  if (on){
+    btn.dataset.label = btn.innerHTML;
+    btn.setAttribute('aria-busy', 'true');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner" aria-hidden="true"></span>${esc(label)}…`;
+  } else {
+    btn.removeAttribute('aria-busy');
+    btn.disabled = false;
+    if (btn.dataset.label) btn.innerHTML = btn.dataset.label;
+  }
+}
+
+const scriptCache = {};
+function loadScript(src){
+  if (!scriptCache[src]){
+    scriptCache[src] = new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = src; s.onload = res;
+      s.onerror = () => { delete scriptCache[src]; rej(new Error('Could not load a required library. Check your internet connection.')); };
+      document.head.appendChild(s);
+    });
+  }
+  return scriptCache[src];
+}
+const LIB_JSZIP = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+const LIB_MAMMOTH = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+function fileBase(){
+  const n = str(data.name).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+  return (n ? n + '-' : '') + 'Resume';
+}
+
+function confirmDialog(title, text, okLabel = 'OK', danger = false){
+  const d = $('#dlgConfirm');
+  $('#cfTitle').textContent = title;
+  $('#cfText').textContent = text;
+  const ok = $('#cfOk');
+  ok.textContent = okLabel;
+  ok.classList.toggle('primary', !danger);
+  ok.classList.toggle('danger', danger);
+  return new Promise(res => {
+    const done = v => { d.close(); ok.onclick = null; $('#cfCancel').onclick = null; d.onclose = null; res(v); };
+    ok.onclick = () => done(true);
+    $('#cfCancel').onclick = () => done(false);
+    d.onclose = () => res(false);
+    d.showModal();
+  });
+}
+
+/* ==================================================================
+   State
+   ================================================================== */
+const blank = () => ({ name:'', email:'', phone:'', suburb:'', state:'', summary:'', skills:[], jobs:[], education:[] });
+const blankJob = () => ({ id: uid(), title:'', company:'', location:'', start:'', end:'', current:false, duties:'' });
+const blankEdu = () => ({ id: uid(), qualification:'', institution:'', year:'' });
+
+function sanitize(o){
+  const d = blank();
+  if (!o || typeof o !== 'object') return d;
+  for (const k of ['name','email','phone','suburb','state','summary']) d[k] = str(o[k]);
+  d.skills = arr(o.skills).map(str).filter(Boolean);
+  d.jobs = arr(o.jobs).map(j => ({
+    id: str(j?.id) || uid(),
+    title: str(j?.title), company: str(j?.company), location: str(j?.location),
+    start: str(j?.start), end: str(j?.end), current: !!j?.current,
+    duties: Array.isArray(j?.duties) ? j.duties.map(str).filter(Boolean).join('\n') : str(j?.duties)
+  }));
+  d.education = arr(o.education).map(e => ({
+    id: str(e?.id) || uid(), qualification: str(e?.qualification), institution: str(e?.institution), year: str(e?.year)
+  }));
+  return d;
+}
+
+let data = (() => { try { return sanitize(JSON.parse(lsGet(STORE_KEY) || 'null')); } catch { return blank(); } })();
+const TPL_NAMES = ['standard','traditional','compact'];
+let template = (() => {
+  const t = lsGet(TPL_KEY);
+  if (TPL_NAMES.includes(t)) return t;
+  return t === 'classic' ? 'traditional' : 'standard'; // older saved choices
+})();
+
+let saveTimer;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => lsSet(STORE_KEY, JSON.stringify(data)), 250);
+}
+function changed(){ save(); renderPreview(); }
+
+/* ==================================================================
+   Editor rendering
+   ================================================================== */
+function datesText(j){
+  const end = j.current ? 'Present' : j.end;
+  if (j.start && end) return `${j.start} - ${end}`;
+  return j.start || end || '';
+}
+
+function renderFields(){
+  $$('[data-field]').forEach(el => { el.value = data[el.dataset.field] || ''; });
+}
+
+function jobSummaryLabel(j){
+  if (j.title && j.company) return `${j.title}, ${j.company}`;
+  return j.title || j.company || '';
+}
+
+function renderJobs(openId){
+  const wrap = $('#jobs');
+  $('#jobsEmpty').hidden = data.jobs.length > 0;
+  wrap.innerHTML = data.jobs.map((j, i) => {
+    const label = jobSummaryLabel(j);
+    const open = openId ? j.id === openId : (!label);
+    return `
+    <details class="item" data-id="${j.id}" ${open ? 'open' : ''}>
+      <summary>
+        <span class="item-title ${label ? '' : 'empty'}">${esc(label || 'New job')}</span>
+        <span class="item-dates">${esc(datesText(j))}</span>
+      </summary>
+      <div class="item-body">
+        <div class="grid2">
+          <label class="f">Job title<input type="text" data-k="title" value="${esc(j.title)}"></label>
+          <label class="f">Employer<input type="text" data-k="company" value="${esc(j.company)}"></label>
+        </div>
+        <label class="f">Location<input type="text" data-k="location" value="${esc(j.location)}" placeholder="e.g. Perth, WA"></label>
+        <div class="grid2">
+          <label class="f">Started<input type="text" data-k="start" value="${esc(j.start)}" placeholder="Mar 2021"></label>
+          <label class="f">Finished<input type="text" data-k="end" value="${esc(j.current ? '' : j.end)}" placeholder="Jun 2024" ${j.current ? 'disabled' : ''}></label>
+        </div>
+        <label class="check" style="margin:-2px 0 12px"><input type="checkbox" data-k="current" ${j.current ? 'checked' : ''}> I still work here</label>
+        <label class="f">Duties and achievements <span class="hint">(one per line)</span>
+          <textarea data-k="duties" rows="5">${esc(j.duties)}</textarea>
+        </label>
+        <div class="item-actions">
+          <button class="btn ai small" type="button" data-act="tidy">Tidy with AI</button>
+          <span class="spacer"></span>
+          <button class="btn ghost small" type="button" data-act="up" ${i === 0 ? 'disabled' : ''} aria-label="Move up">Move up</button>
+          <button class="btn ghost small" type="button" data-act="down" ${i === data.jobs.length - 1 ? 'disabled' : ''} aria-label="Move down">Move down</button>
+          <button class="btn ghost small danger" type="button" data-act="remove">Remove</button>
+        </div>
+      </div>
+    </details>`;
+  }).join('');
+}
+
+function renderEdu(openId){
+  const wrap = $('#edu');
+  $('#eduEmpty').hidden = data.education.length > 0;
+  wrap.innerHTML = data.education.map(e => {
+    const label = [e.qualification, e.institution].filter(Boolean).join(', ');
+    const open = openId ? e.id === openId : !label;
+    return `
+    <details class="item" data-id="${e.id}" ${open ? 'open' : ''}>
+      <summary>
+        <span class="item-title ${label ? '' : 'empty'}">${esc(label || 'New entry')}</span>
+        <span class="item-dates">${esc(e.year)}</span>
+      </summary>
+      <div class="item-body">
+        <label class="f">Qualification, ticket or licence<input type="text" data-k="qualification" value="${esc(e.qualification)}" placeholder="e.g. Certificate III in Civil Construction"></label>
+        <div class="grid3">
+          <label class="f">Where<input type="text" data-k="institution" value="${esc(e.institution)}" placeholder="e.g. North Metropolitan TAFE"></label>
+          <label class="f">Year<input type="text" data-k="year" value="${esc(e.year)}"></label>
+        </div>
+        <div class="item-actions"><span class="spacer"></span>
+          <button class="btn ghost small danger" type="button" data-act="remove">Remove</button>
+        </div>
+      </div>
+    </details>`;
+  }).join('');
+}
+
+function renderSkills(){
+  const box = $('#chips'), input = $('#skillInput');
+  $$('.chip', box).forEach(c => c.remove());
+  data.skills.forEach((s, i) => {
+    const c = document.createElement('span');
+    c.className = 'chip';
+    c.innerHTML = `${esc(s)}<button type="button" data-i="${i}" aria-label="Remove ${esc(s)}">×</button>`;
+    box.insertBefore(c, input);
+  });
+}
+
+function renderEditor(){ renderFields(); renderJobs(); renderEdu(); renderSkills(); }
+
+/* ==================================================================
+   ATS-safe output
+   One model feeds the preview, the Word file and the PDF, so all three
+   match: single column, body text only (no headers, footers, tables,
+   columns, text boxes, images, icons or colour), standard section
+   headings, standard fonts, plain punctuation.
+   ================================================================== */
+const TPL = {
+  standard:    { css:'Arial, Helvetica, "Liberation Sans", sans-serif',           docx:'Arial',           pdf:'helvetica', body:10.5, name:16, head:11.5, upper:true,  headBefore:12, headAfter:4, jobGap:8, line:1.3 },
+  traditional: { css:'"Times New Roman", Times, "Liberation Serif", serif',       docx:'Times New Roman', pdf:'times',     body:11.5, name:17, head:12,   upper:true,  headBefore:12, headAfter:4, jobGap:8, line:1.3 },
+  compact:     { css:'Arial, Helvetica, "Liberation Sans", sans-serif',           docx:'Arial',           pdf:'helvetica', body:10,   name:15, head:11,   upper:true,  headBefore:9,  headAfter:3, jobGap:6, line:1.22 }
+};
+
+function hasJob(j){ return j.title || j.company || j.duties || j.start; }
+function hasEdu(e){ return e.qualification || e.institution; }
+function dutyLines(j){ return String(j.duties || '').split('\n').map(s => s.replace(/^\s*[-–—•*·●▪◦‣>]+\s*/, '').trim()).filter(Boolean); }
+
+/* Plain text that every ATS parser (and the PDF's standard fonts) can read:
+   straight quotes, plain hyphens, no emoji, symbols or invisible characters. */
+function atsText(s){
+  return String(s ?? '')
+    .normalize('NFKC')
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u00B4`]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
+    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-')
+    .replace(/\u2026/g, '...')
+    .replace(/[\u2022\u2023\u2043\u2219\u25AA\u25AB\u25CF\u25E6\u25A0\u25A1\u00B7]/g, '-')
+    .replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000\t]/g, ' ')
+    .replace(/[^\x00-\xFF]/g, c => c.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+    .replace(/[^\x0A\x20-\x7E\u00C0-\u00FF]/g, '')
+    .replace(/ {2,}/g, ' ')
+    .trim();
+}
+
+function buildBlocks(d, tplName){
+  const S = TPL[tplName] || TPL.standard;
+  const c = atsText;
+  const B = [];
+  const H = t => B.push({ t:'heading', text: S.upper ? t.toUpperCase() : t });
+
+  const name = c(d.name);
+  B.push({ t:'name', text: name || 'Your name', ph: !name });
+  const contact = [c([d.suburb, d.state].filter(Boolean).join(' ')), c(d.phone), c(d.email)].filter(Boolean).join(' | ');
+  if (contact) B.push({ t:'contact', text: contact });
+
+  const summary = c(d.summary).replace(/\s*\n+\s*/g, ' ');
+  if (summary){ H('Summary'); B.push({ t:'para', text: summary }); }
+
+  const jobs = d.jobs.filter(hasJob);
+  if (jobs.length){
+    H('Work Experience');
+    jobs.forEach((j, i) => {
+      if (i) B.push({ t:'gap' });
+      const title = c(j.title), company = c(j.company), loc = c(j.location);
+      B.push({ t:'title', text: title || company || 'Role' });
+      const sub = title ? [company, loc].filter(Boolean).join(', ') : loc;
+      if (sub) B.push({ t:'line', text: sub });
+      const dates = c(datesText(j));
+      if (dates) B.push({ t:'line', text: dates });
+      dutyLines(j).map(c).filter(Boolean).forEach(l => B.push({ t:'bullet', text: l }));
+    });
+  }
+
+  const edu = d.education.filter(hasEdu);
+  if (edu.length){
+    H('Education');
+    edu.forEach((e, i) => {
+      if (i) B.push({ t:'gap' });
+      const q = c(e.qualification), inst = c(e.institution), yr = c(e.year);
+      B.push({ t:'title', text: q || inst });
+      const sub = [q ? inst : '', yr].filter(Boolean).join(', ');
+      if (sub) B.push({ t:'line', text: sub });
+    });
+  }
+
+  const skills = d.skills.map(c).filter(Boolean);
+  if (skills.length){ H('Skills'); B.push({ t:'para', text: skills.join(', ') }); }
+  return { S, B };
+}
+
+function blocksHTML({ S, B }){
+  let h = '', inList = false, gap = 0;
+  for (const b of B){
+    if (b.t !== 'bullet' && inList){ h += '</ul>'; inList = false; }
+    if (b.t === 'gap'){ gap = S.jobGap; continue; }
+    const mt = gap ? `margin-top:${gap}pt;` : ''; gap = 0;
+    switch (b.t){
+      case 'name':    h += `<h1 class="${b.ph ? 'r-ph' : ''}" style="font-size:${S.name}pt;font-weight:bold;margin-bottom:2pt">${esc(b.text)}</h1>`; break;
+      case 'contact': h += `<p>${esc(b.text)}</p>`; break;
+      case 'heading': h += `<h2 style="font-size:${S.head}pt;font-weight:bold;margin:${S.headBefore}pt 0 ${S.headAfter}pt">${esc(b.text)}</h2>`; break;
+      case 'title':   h += `<p style="${mt}font-weight:bold">${esc(b.text)}</p>`; break;
+      case 'para':
+      case 'line':    h += `<p style="${mt}">${esc(b.text)}</p>`; break;
+      case 'bullet':
+        if (!inList){ h += '<ul style="margin-top:2pt;padding-left:15pt">'; inList = true; }
+        h += `<li>${esc(b.text)}</li>`; break;
+    }
+  }
+  if (inList) h += '</ul>';
+  return h;
+}
+
+function renderPreview(){
+  const r = $('#resume');
+  const model = buildBlocks(data, template);
+  r.style.fontFamily = model.S.css;
+  r.style.fontSize = model.S.body + 'pt';
+  r.style.lineHeight = model.S.line;
+  r.innerHTML = blocksHTML(model);
+  fitPaper();
+  renderAts();
+}
+
+function fitPaper(){
+  const frame = $('#paperFrame'), scale = $('#paperScale'), paper = $('.paper', scale);
+  if (!frame.offsetParent) return; // hidden (mobile edit view)
+  const pw = paper.offsetWidth;
+  const s = Math.min(1, frame.clientWidth / pw);
+  scale.style.transform = `scale(${s})`;
+  frame.style.height = (paper.offsetHeight * s) + 'px';
+  // A4 at the paper's own width; each page loses 36 mm to margins
+  const pageH = pw * 297 / 210, marginPx = pw * 18 / 210;
+  const content = $('#resume').offsetHeight;
+  const pages = Math.max(1, Math.ceil(content / (pageH - marginPx * 2) - 0.02));
+  $('#paperMeta').textContent = `A4, about ${pages} page${pages > 1 ? 's' : ''}`;
+}
+new ResizeObserver(() => fitPaper()).observe($('#paperFrame'));
+
+/* ---------- ATS checklist ---------- */
+function atsChecks(d){
+  const out = [];
+  if (!str(d.name)) out.push('Add your full name.');
+  if (!str(d.phone)) out.push('Add a phone number.');
+  if (!str(d.email)) out.push('Add an email address.');
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email.trim())) out.push('Your email address doesn\'t look complete.');
+  if (!str(d.suburb) && !str(d.state)) out.push('Add your suburb or town and state. Recruiters often filter candidates by location.');
+  const jobs = d.jobs.filter(hasJob);
+  if (!jobs.length) out.push('Add at least one job.');
+  jobs.forEach(j => {
+    const n = jobSummaryLabel(j) || 'One job';
+    if (!str(j.title)) out.push(`${n}: add the job title. ATS software matches titles against the job ad.`);
+    if (!str(j.company)) out.push(`${n}: add the employer.`);
+    if (!str(j.start)) out.push(`${n}: add a start date.`);
+    if (!j.current && !str(j.end)) out.push(`${n}: add a finish date, or tick "I still work here".`);
+    if (!dutyLines(j).length) out.push(`${n}: add a few duties.`);
+  });
+  const words = str(d.summary).split(/\s+/).filter(Boolean).length;
+  if (!words) out.push('Add a short summary.');
+  else if (words > 90) out.push(`Your summary is ${words} words. Keep it under 90.`);
+  if (d.skills.length < 5) out.push('List at least 5 skills. They\'re the keywords ATS software looks for.');
+  const all = [d.name, d.phone, d.email, d.summary, d.skills.join(' '),
+    d.jobs.map(j => [j.title, j.company, j.location, j.start, j.end, j.duties].join(' ')).join(' '),
+    d.education.map(e => [e.qualification, e.institution, e.year].join(' ')).join(' ')].join(' ');
+  if (/[^\x00-\xFF\u2018\u2019\u201C\u201D\u2013\u2014\u2022\u2026]/.test(all))
+    out.push('Some emoji or special symbols were found. They\'re left out of the Word and PDF files, so check nothing important was lost.');
+  return out;
+}
+function renderAts(){
+  const issues = atsChecks(data);
+  $('#atsDot').classList.toggle('on', !issues.length);
+  $('#atsTitle').textContent = issues.length
+    ? `ATS check: ${issues.length} thing${issues.length > 1 ? 's' : ''} to fix`
+    : 'ATS check: ready to send';
+  $('#atsNote').textContent = 'Output is always single column, plain text in ' + (template === 'traditional' ? 'Times New Roman' : 'Arial') + ', with standard headings and no tables, columns, graphics, colour, headers or footers.';
+  $('#atsList').innerHTML = issues.map(i => `<li>${esc(i)}</li>`).join('');
+}
+
+/* ==================================================================
+   Editor events
+   ================================================================== */
+$$('[data-field]').forEach(el => {
+  el.addEventListener('input', () => { data[el.dataset.field] = el.value; changed(); });
+});
+
+function itemInput(listKey, e){
+  const item = e.target.closest('.item'); if (!item) return;
+  const k = e.target.dataset.k; if (!k) return;
+  const obj = data[listKey].find(x => x.id === item.dataset.id); if (!obj) return;
+  obj[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+  if (listKey === 'jobs'){
+    if (k === 'current'){
+      const endInput = $('[data-k="end"]', item);
+      endInput.disabled = obj.current;
+      if (obj.current){ endInput.value = ''; obj.end = ''; }
+    }
+    const label = jobSummaryLabel(obj);
+    const t = $('.item-title', item);
+    t.textContent = label || 'New job'; t.classList.toggle('empty', !label);
+    $('.item-dates', item).textContent = datesText(obj);
+  } else {
+    const label = [obj.qualification, obj.institution].filter(Boolean).join(', ');
+    const t = $('.item-title', item);
+    t.textContent = label || 'New entry'; t.classList.toggle('empty', !label);
+    $('.item-dates', item).textContent = obj.year;
+  }
+  changed();
+}
+$('#jobs').addEventListener('input', e => itemInput('jobs', e));
+$('#jobs').addEventListener('change', e => { if (e.target.type === 'checkbox') itemInput('jobs', e); });
+$('#edu').addEventListener('input', e => itemInput('education', e));
+
+$('#jobs').addEventListener('click', async e => {
+  const btn = e.target.closest('button[data-act]'); if (!btn) return;
+  const item = btn.closest('.item'); const id = item.dataset.id;
+  const i = data.jobs.findIndex(j => j.id === id); if (i < 0) return;
+  const act = btn.dataset.act;
+  if (act === 'up' && i > 0){ [data.jobs[i-1], data.jobs[i]] = [data.jobs[i], data.jobs[i-1]]; renderJobs(id); changed(); }
+  if (act === 'down' && i < data.jobs.length - 1){ [data.jobs[i+1], data.jobs[i]] = [data.jobs[i], data.jobs[i+1]]; renderJobs(id); changed(); }
+  if (act === 'remove'){
+    const j = data.jobs[i];
+    const hasContent = hasJob(j);
+    if (hasContent && !(await confirmDialog('Remove this job?', `"${jobSummaryLabel(j) || 'This job'}" and its duties will be removed.`, 'Remove job', true))) return;
+    data.jobs.splice(i, 1); renderJobs('__none__'); changed();
+  }
+  if (act === 'tidy') aiTidy(data.jobs[i], btn);
+});
+$('#edu').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-act="remove"]'); if (!btn) return;
+  const id = btn.closest('.item').dataset.id;
+  data.education = data.education.filter(x => x.id !== id);
+  renderEdu('__none__'); changed();
+});
+
+$('#btnAddJob').addEventListener('click', () => {
+  const j = blankJob(); data.jobs.unshift(j); renderJobs(j.id); changed();
+  $(`.item[data-id="${j.id}"] [data-k="title"]`).focus();
+});
+$('#btnAddEdu').addEventListener('click', () => {
+  const e = blankEdu(); data.education.push(e); renderEdu(e.id); changed();
+  $(`#edu .item[data-id="${e.id}"] [data-k="qualification"]`).focus();
+});
+
+/* skills */
+function addSkills(list){
+  let added = 0;
+  const have = new Set(data.skills.map(s => s.toLowerCase()));
+  for (const raw of list){
+    const s = str(raw); if (!s || have.has(s.toLowerCase())) continue;
+    data.skills.push(s); have.add(s.toLowerCase()); added++;
+  }
+  if (added){ renderSkills(); changed(); }
+  return added;
+}
+const skillInput = $('#skillInput');
+skillInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ','){
+    e.preventDefault();
+    if (skillInput.value.trim()){ addSkills(skillInput.value.split(',')); skillInput.value = ''; }
+  } else if (e.key === 'Backspace' && !skillInput.value && data.skills.length){
+    data.skills.pop(); renderSkills(); changed();
+  }
+});
+skillInput.addEventListener('blur', () => { if (skillInput.value.trim()){ addSkills(skillInput.value.split(',')); skillInput.value = ''; } });
+skillInput.addEventListener('paste', e => {
+  const t = (e.clipboardData || window.clipboardData).getData('text');
+  if (/[,\n]/.test(t)){ e.preventDefault(); addSkills(t.split(/[,\n]/)); }
+});
+$('#chips').addEventListener('click', e => {
+  const b = e.target.closest('button[data-i]');
+  if (b){ data.skills.splice(+b.dataset.i, 1); renderSkills(); changed(); skillInput.focus(); }
+  else if (e.target.id === 'chips') skillInput.focus();
+});
+$('#skillSuggest').addEventListener('click', e => {
+  const b = e.target.closest('button[data-skill]'); if (!b) return;
+  addSkills([b.dataset.skill]); b.remove();
+});
+
+/* template switch */
+$$('input[name="tpl"]').forEach(r => {
+  r.checked = r.value === template;
+  r.addEventListener('change', () => { template = r.value; lsSet(TPL_KEY, template); renderPreview(); });
+});
+
+/* mobile view */
+$$('.mobile-tabs button').forEach(b => b.addEventListener('click', () => {
+  document.body.dataset.view = b.dataset.view;
+  $$('.mobile-tabs button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  if (b.dataset.view === 'preview') requestAnimationFrame(fitPaper);
+}));
+
+/* ==================================================================
+   Gemini
+   ================================================================== */
+const API = 'https://generativelanguage.googleapis.com/v1beta';
+class NeedsSetup extends Error {}
+
+function aiReady(){ return !!(getSecret(CK_KEY) && getSecret(CK_MODEL)); }
+function modelShort(m){ return String(m || '').replace(/^models\//, ''); }
+function refreshAiBadge(){
+  const on = aiReady();
+  $('#aiDot').classList.toggle('on', on);
+  $('#aiLabel').textContent = on ? modelShort(getSecret(CK_MODEL)) : 'Set up AI';
+}
+
+async function listModels(key){
+  const out = [];
+  let token = '';
+  for (let guard = 0; guard < 10; guard++){
+    const url = `${API}/models?pageSize=1000&key=${encodeURIComponent(key)}` + (token ? `&pageToken=${encodeURIComponent(token)}` : '');
+    const res = await fetch(url);
+    if (!res.ok){
+      let msg = res.statusText;
+      try { msg = (await res.json()).error.message; } catch {}
+      if (res.status === 400 || res.status === 403) msg = 'Google rejected this key. Check it was copied in full. ' + `(${msg})`;
+      throw new Error(msg);
+    }
+    const j = await res.json();
+    out.push(...(j.models || []));
+    token = j.nextPageToken;
+    if (!token) break;
+  }
+  const skip = /embedding|embed|aqa|imagen|veo|tts|image-generation|native-audio|live|learnlm-.*-exp$/i;
+  return out
+    .filter(m => (m.supportedGenerationMethods || []).includes('generateContent') && !skip.test(m.name))
+    .sort((a, b) => {
+      const ga = /gemini/i.test(a.name) ? 0 : 1, gb = /gemini/i.test(b.name) ? 0 : 1;
+      return ga - gb || b.name.localeCompare(a.name, undefined, { numeric: true });
+    });
+}
+
+async function callGemini(parts, { json = false, temperature = 0.4 } = {}){
+  const key = getSecret(CK_KEY), model = getSecret(CK_MODEL);
+  if (!key || !model) throw new NeedsSetup('AI is not set up');
+  const body = { contents: [{ role: 'user', parts }], generationConfig: { temperature } };
+  if (json) body.generationConfig.responseMimeType = 'application/json';
+  const post = () => fetch(`${API}/${model}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify(body)
+  });
+  let res = await post();
+  if (!res.ok && json && res.status === 400){
+    // some models don't support JSON mode; retry as plain text
+    delete body.generationConfig.responseMimeType;
+    res = await post();
+  }
+  if (!res.ok){
+    let msg = res.statusText;
+    try { msg = (await res.json()).error.message; } catch {}
+    if (res.status === 429) msg = 'Rate limit or quota reached for this model. Wait a minute or pick a different model. ' + `(${msg})`;
+    throw new Error('Gemini: ' + msg);
+  }
+  const j = await res.json();
+  const cand = j.candidates && j.candidates[0];
+  if (!cand){
+    const why = j.promptFeedback && j.promptFeedback.blockReason;
+    throw new Error(why ? `Gemini blocked the request (${why}).` : 'Gemini returned no answer. Try again.');
+  }
+  const text = (cand.content && cand.content.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
+  if (!text) throw new Error('Gemini returned an empty answer' + (cand.finishReason ? ` (${cand.finishReason})` : '') + '. Try again or pick another model.');
+  return text;
+}
+
+function parseJSON(t){
+  const clean = t.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  try { return JSON.parse(clean); } catch {}
+  const m = clean.match(/[\[{][\s\S]*[\]}]/);
+  if (m){ try { return JSON.parse(m[0]); } catch {} }
+  throw new Error('The model sent back something that isn\'t valid data. Try again, or pick a different model.');
+}
+
+function handleAiError(err){
+  if (err instanceof NeedsSetup){
+    toast('Add your Gemini API key and pick a model to use AI features.');
+    openAiSettings();
+  } else {
+    console.error(err);
+    toast(err.message || 'Something went wrong talking to Gemini.', true);
+  }
+}
+
+function workHistoryText(){
+  return data.jobs.filter(hasJob).map(j =>
+    `- ${j.title || 'Role'} at ${j.company || 'employer'} (${datesText(j) || 'dates not given'})${j.duties ? '\n  ' + dutyLines(j).join('\n  ') : ''}`
+  ).join('\n');
+}
+
+/* ---------- summary ---------- */
+$('#btnSummary').addEventListener('click', async e => {
+  const btn = e.currentTarget;
+  if (!data.jobs.some(hasJob) && !data.skills.length && !data.summary){
+    toast('Add at least one job or a few skills first, so the AI has something to work from.'); return;
+  }
+  busy(btn, true, 'Writing');
+  try {
+    const prompt = `Write a professional resume summary for an Australian job seeker.
+Rules: 2 to 4 sentences, under 70 words. Australian English spelling. No first-person pronouns ("I", "my").
+Avoid clichés such as "results-driven", "passionate", "team player", "go-getter". Do not invent qualifications, employers, years or numbers.
+Plain text only: no emoji, no bullet symbols, no markdown, straight quotes and plain hyphens.
+Return only the summary text, no heading, no quotes.
+
+Work history:
+${workHistoryText() || '(none given)'}
+
+Skills: ${data.skills.join(', ') || '(none given)'}
+${data.summary ? `\nTheir current draft, improve it rather than starting over:\n${data.summary}` : ''}`;
+    const text = await callGemini([{ text: prompt }], { temperature: 0.6 });
+    data.summary = text.replace(/^["“]|["”]$/g, '').replace(/^summary:\s*/i, '').trim();
+    $('[data-field="summary"]').value = data.summary;
+    changed();
+    toast('Summary written. Edit it to sound like you.');
+  } catch (err){ handleAiError(err); }
+  finally { busy(btn, false); }
+});
+
+/* ---------- tidy job duties ---------- */
+async function aiTidy(job, btn){
+  if (!dutyLines(job).length){ toast('Add a few duties first, even rough notes work.'); return; }
+  busy(btn, true, 'Tidying');
+  try {
+    const prompt = `Rewrite these job duties as 3 to 6 concise resume bullet points.
+Role: ${job.title || 'unknown'} at ${job.company || 'unknown'}${job.current ? ' (current job, use present tense)' : ' (past job, use past tense)'}.
+Rules: start each bullet with a strong verb, Australian English, one line each, keep every real fact, and never add numbers, tools or claims that aren't in the notes. No full stops at the end.
+Plain text only: no emoji, no bullet symbols, no markdown, straight quotes and plain hyphens. Use the words employers put in job ads (e.g. "operated a plate compactor", not "ran the wacker").
+Return a JSON array of strings only.
+
+Notes:
+${dutyLines(job).join('\n')}`;
+    const out = parseJSON(await callGemini([{ text: prompt }], { json: true, temperature: 0.4 }));
+    const lines = arr(Array.isArray(out) ? out : out.bullets || out.duties).map(str).filter(Boolean);
+    if (!lines.length) throw new Error('The AI didn\'t return any bullet points. Try again.');
+    job.duties = lines.join('\n');
+    const ta = $(`#jobs .item[data-id="${job.id}"] [data-k="duties"]`);
+    if (ta) ta.value = job.duties;
+    changed();
+    toast('Duties tidied.');
+  } catch (err){ handleAiError(err); }
+  finally { busy(btn, false); }
+}
+
+/* ---------- suggest skills ---------- */
+$('#btnSkills').addEventListener('click', async e => {
+  const btn = e.currentTarget;
+  if (!data.jobs.some(hasJob)){ toast('Add your work history first, so suggestions fit your experience.'); return; }
+  busy(btn, true, 'Thinking');
+  try {
+    const prompt = `Suggest up to 10 skills for this person's resume, based only on their work history.
+Mix practical/technical skills with a few transferable ones. Each skill is 1 to 4 words, Australian English.
+Use the standard wording found in job ads and licence names so ATS keyword matching picks them up. Plain text only, no emoji or symbols.
+Do not repeat any of these existing skills: ${data.skills.join(', ') || '(none)'}.
+Return a JSON array of strings only.
+
+Work history:
+${workHistoryText()}`;
+    const out = parseJSON(await callGemini([{ text: prompt }], { json: true, temperature: 0.5 }));
+    const have = new Set(data.skills.map(s => s.toLowerCase()));
+    const list = arr(Array.isArray(out) ? out : out.skills).map(str).filter(s => s && !have.has(s.toLowerCase()));
+    const box = $('#skillSuggest');
+    box.innerHTML = list.length
+      ? `<span class="hint" style="width:100%">Click a suggestion to add it:</span>` + list.map(s => `<button type="button" data-skill="${esc(s)}">+ ${esc(s)}</button>`).join('')
+      : `<span class="hint">No new suggestions this time.</span>`;
+  } catch (err){ handleAiError(err); }
+  finally { busy(btn, false); }
+});
+
+/* ==================================================================
+   AI settings dialog
+   ================================================================== */
+const dlgAi = $('#dlgAi');
+const aiKeyEl = $('#aiKey'), aiModelEl = $('#aiModel'), aiStatus = $('#aiStatus');
+let loadedFor = '';
+
+function setAiStatus(msg, kind = ''){ aiStatus.textContent = msg; aiStatus.className = 'status' + (kind ? ' ' + kind : ''); }
+
+function fillModels(models, preferred){
+  aiModelEl.innerHTML = models.map(m =>
+    `<option value="${esc(m.name)}">${esc(m.displayName || modelShort(m.name))} (${esc(modelShort(m.name))})</option>`).join('');
+  aiModelEl.disabled = !models.length;
+  const names = models.map(m => m.name);
+  const pick = (preferred && names.includes(preferred)) ? preferred
+    : names.find(n => /gemini-flash-latest$/.test(n))
+    || names.find(n => /gemini-[\d.]+-flash$/.test(n))
+    || names.find(n => /flash/.test(n) && !/lite|preview|exp/.test(n))
+    || names[0];
+  if (pick) aiModelEl.value = pick;
+}
+
+async function loadModels(){
+  const key = aiKeyEl.value.trim();
+  if (!key){ setAiStatus('Paste your API key first.', 'err'); aiKeyEl.focus(); return; }
+  const btn = $('#aiLoad');
+  busy(btn, true, 'Loading');
+  setAiStatus('');
+  try {
+    const models = await listModels(key);
+    if (!models.length) throw new Error('This key works but no text models are available to it.');
+    fillModels(models, getSecret(CK_MODEL));
+    loadedFor = key;
+    setAiStatus(`${models.length} models available. Flash models are fast and cheap, which suits this app.`, 'ok');
+  } catch (err){
+    aiModelEl.innerHTML = '<option value="">Load models first</option>'; aiModelEl.disabled = true; loadedFor = '';
+    setAiStatus(err.message || 'Could not load models.', 'err');
+  } finally { busy(btn, false); }
+}
+
+function openAiSettings(){
+  const key = getSecret(CK_KEY);
+  aiKeyEl.value = key; aiKeyEl.type = 'password'; $('#aiShow').textContent = 'Show';
+  setAiStatus('');
+  $('#aiForget').hidden = !key;
+  if (key && loadedFor !== key){
+    aiModelEl.innerHTML = '<option value="">Loading…</option>'; aiModelEl.disabled = true;
+    loadModels();
+  } else if (!key){
+    aiModelEl.innerHTML = '<option value="">Load models first</option>'; aiModelEl.disabled = true;
+  }
+  dlgAi.showModal();
+  if (!key) aiKeyEl.focus();
+}
+
+$('#btnAi').addEventListener('click', openAiSettings);
+$('#aiLoad').addEventListener('click', loadModels);
+aiKeyEl.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); loadModels(); } });
+aiKeyEl.addEventListener('input', () => {
+  if (aiKeyEl.value.trim() !== loadedFor){
+    aiModelEl.innerHTML = '<option value="">Load models first</option>'; aiModelEl.disabled = true; setAiStatus('');
+  }
+});
+$('#aiShow').addEventListener('click', () => {
+  const show = aiKeyEl.type === 'password';
+  aiKeyEl.type = show ? 'text' : 'password';
+  $('#aiShow').textContent = show ? 'Hide' : 'Show';
+});
+$('#aiSave').addEventListener('click', () => {
+  const key = aiKeyEl.value.trim();
+  if (!key){ setAiStatus('Paste your API key first.', 'err'); return; }
+  if (aiModelEl.disabled || !aiModelEl.value){ setAiStatus('Load the models and pick one before saving.', 'err'); return; }
+  const inCookie = setSecret(CK_KEY, key) & setSecret(CK_MODEL, aiModelEl.value);
+  refreshAiBadge(); dlgAi.close();
+  toast(inCookie
+    ? `Key saved in a cookie. AI ready, using ${modelShort(aiModelEl.value)}.`
+    : 'This browser blocks cookies on pages opened from a file, so the key was saved in local storage instead. It will use a cookie once the site is hosted.');
+});
+$('#aiForget').addEventListener('click', () => {
+  delSecret(CK_KEY); delSecret(CK_MODEL); loadedFor = '';
+  refreshAiBadge(); dlgAi.close(); toast('API key removed from this browser.');
+});
+
+$$('dialog [data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
+
+/* ==================================================================
+   Import
+   ================================================================== */
+const dlgImp = $('#dlgImport');
+let imported = null;
+
+function impView(step){
+  $('#impNeedsAi').hidden = step !== 'needsAi';
+  $('#impPick').hidden = step !== 'pick';
+  $('#impResults').hidden = step !== 'results';
+  $('#impApply').hidden = step !== 'results';
+  $('#impAgain').hidden = step !== 'results';
+}
+function impStatus(msg, kind = ''){ const s = $('#impStatus'); s.innerHTML = msg; s.className = 'status' + (kind ? ' ' + kind : ''); }
+
+function openImport(){
+  imported = null;
+  $('#impFile').value = '';
+  impStatus('');
+  impView(aiReady() ? 'pick' : 'needsAi');
+  dlgImp.showModal();
+}
+$('#btnImport').addEventListener('click', openImport);
+$('#impSetup').addEventListener('click', () => { dlgImp.close(); openAiSettings(); });
+$('#impAgain').addEventListener('click', () => { imported = null; $('#impFile').value = ''; impStatus(''); impView('pick'); });
+
+const drop = $('#drop');
+['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) readResume(f); });
+$('#impFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) readResume(f); });
+
+function fileToBase64(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(',')[1]);
+    r.onerror = () => rej(new Error('Could not read that file.'));
+    r.readAsDataURL(file);
+  });
+}
+
+const IMPORT_PROMPT = `You are reading a resume. Extract its contents into JSON with exactly this shape:
+{
+  "name": string, "email": string, "phone": string, "suburb": string, "state": string,
+  "summary": string,
+  "skills": [string],
+  "jobs": [{"title": string, "company": string, "location": string, "start": string, "end": string, "current": boolean, "duties": [string]}],
+  "education": [{"qualification": string, "institution": string, "year": string}]
+}
+Rules:
+- Copy facts only. Never invent anything. Use "" or [] for anything missing.
+- "state" is an Australian state abbreviation (WA, NSW, VIC, QLD, SA, TAS, ACT, NT) if one is given, otherwise "".
+- Dates as "Mon YYYY" (e.g. "Mar 2021") or just "YYYY" if that's all that's given.
+- If a job is ongoing ("Present", "Current", "Now"), set "current": true and "end": "".
+- Put each duty or achievement as its own string, without bullet symbols.
+- List jobs newest first. Include volunteer roles and apprenticeships as jobs.
+- Put licences, tickets and certificates in "education".
+Return the JSON only.`;
+
+async function readResume(file){
+  const name = file.name || 'file';
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const type = file.type || '';
+  if (file.size > 18 * 1024 * 1024){ impStatus('That file is over 18 MB. Try a smaller PDF or a compressed photo.', 'err'); return; }
+  if (ext === 'doc'){ impStatus('Old .doc files can\'t be read here. Open it in Word or Google Docs and save it as .docx or PDF, then try again.', 'err'); return; }
+
+  impStatus(`<span class="spinner"></span> Reading ${esc(name)}…`);
+  try {
+    let parts;
+    if (ext === 'pdf' || type === 'application/pdf'){
+      parts = [{ inline_data: { mime_type: 'application/pdf', data: await fileToBase64(file) } }, { text: IMPORT_PROMPT }];
+    } else if (/^image\//.test(type) || ['png','jpg','jpeg','webp'].includes(ext)){
+      const mime = type || (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg');
+      parts = [{ inline_data: { mime_type: mime, data: await fileToBase64(file) } }, { text: IMPORT_PROMPT }];
+    } else if (ext === 'docx'){
+      await loadScript(LIB_MAMMOTH);
+      const { value } = await window.mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+      if (!value.trim()) throw new Error('That Word file has no readable text in it.');
+      parts = [{ text: IMPORT_PROMPT + '\n\nResume text:\n' + value }];
+    } else if (ext === 'txt' || /^text\//.test(type)){
+      const t = await file.text();
+      if (!t.trim()) throw new Error('That file is empty.');
+      parts = [{ text: IMPORT_PROMPT + '\n\nResume text:\n' + t }];
+    } else {
+      throw new Error('That file type isn\'t supported. Use PDF, .docx, .txt or an image.');
+    }
+
+    impStatus(`<span class="spinner"></span> Gemini is pulling out your work history…`);
+    const raw = parseJSON(await callGemini(parts, { json: true, temperature: 0.1 }));
+    imported = sanitize(raw);
+    imported.jobs.forEach(j => { if (/^(present|current|now)$/i.test(j.end)){ j.current = true; j.end = ''; } });
+    if (!imported.jobs.length && !imported.name && !imported.education.length)
+      throw new Error('No resume details were found in that file. If it\'s a scanned PDF, try a clear photo instead.');
+    showImportResults(name);
+  } catch (err){
+    if (err instanceof NeedsSetup){ impView('needsAi'); return; }
+    console.error(err);
+    impStatus(esc(err.message || 'Could not read that file.'), 'err');
+  }
+}
+
+function showImportResults(filename){
+  const d = imported;
+  $('#impSource').textContent = `From ${filename}. Untick anything you don't want.`;
+
+  const detailBits = [d.name, d.phone, d.email].filter(Boolean);
+  const extras = [d.summary ? 'summary' : '', d.skills.length ? `${d.skills.length} skills` : ''].filter(Boolean);
+  $('#impDetailsInfo').textContent = [detailBits.join(', '), extras.join(', ')].filter(Boolean).join(' — ') || 'Nothing found';
+  const detailsEmptyNow = !data.name && !data.phone && !data.email && !data.summary;
+  $('#impDetails').checked = detailsEmptyNow && (detailBits.length > 0 || extras.length > 0);
+  $('#impDetails').disabled = !detailBits.length && !extras.length;
+
+  $('#impJobsTitle').textContent = d.jobs.length ? `Jobs found (${d.jobs.length})` : 'No jobs found';
+  $('#impJobs').hidden = !d.jobs.length;
+  $('#impJobs').innerHTML = d.jobs.map((j, i) => `
+    <label class="check"><input type="checkbox" data-i="${i}" checked>
+      <span>${esc(jobSummaryLabel(j) || 'Untitled role')}
+        <small>${esc([datesText(j), dutyLines(j).length ? dutyLines(j).length + ' duties' : ''].filter(Boolean).join(', '))}</small>
+      </span>
+    </label>`).join('');
+
+  $('#impEduWrap').hidden = !d.education.length;
+  $('#impEduInfo').innerHTML = d.education.length
+    ? `${d.education.length} entr${d.education.length === 1 ? 'y' : 'ies'}<small>${esc(d.education.map(e => e.qualification || e.institution).join(', '))}</small>` : '';
+
+  impView('results');
+}
+
+$('#impApply').addEventListener('click', () => {
+  if (!imported) return;
+  const replace = $('input[name="impMode"]:checked').value === 'replace';
+  const pickedJobs = $$('#impJobs input:checked').map(cb => imported.jobs[+cb.dataset.i]);
+  const takeEdu = !$('#impEduWrap').hidden && $('#impEdu').checked;
+  let msg = [];
+
+  if ($('#impDetails').checked){
+    for (const k of ['name','email','phone','suburb','state','summary']) if (imported[k]) data[k] = imported[k];
+    addSkills(imported.skills);
+    msg.push('details');
+  }
+
+  if (replace){
+    data.jobs = pickedJobs.map(j => ({ ...j, id: uid() }));
+    if (takeEdu) data.education = imported.education.map(e => ({ ...e, id: uid() }));
+    else data.education = [];
+  } else {
+    const key = j => (j.title + '|' + j.company).toLowerCase().replace(/\s+/g, ' ');
+    const have = new Set(data.jobs.map(key));
+    let skipped = 0;
+    pickedJobs.forEach(j => { if (have.has(key(j))) skipped++; else data.jobs.push({ ...j, id: uid() }); });
+    if (skipped) msg.push(`${skipped} duplicate job${skipped > 1 ? 's' : ''} skipped`);
+    if (takeEdu){
+      const ek = e => (e.qualification + '|' + e.institution).toLowerCase();
+      const haveE = new Set(data.education.map(ek));
+      imported.education.forEach(e => { if (!haveE.has(ek(e))) data.education.push({ ...e, id: uid() }); });
+    }
+  }
+
+  if (pickedJobs.length) msg.unshift(`${pickedJobs.length} job${pickedJobs.length > 1 ? 's' : ''}`);
+  if (takeEdu) msg.push('education');
+  renderFields(); renderJobs('__none__'); renderEdu('__none__'); renderSkills(); changed();
+  dlgImp.close();
+  toast(msg.length ? 'Imported ' + msg.join(', ') + '.' : 'Nothing was selected to import.');
+});
+
+/* ==================================================================
+   Word (.docx) and PDF
+   ================================================================== */
+const LIB_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+
+function buildDocxXml(d, tplName){
+  const { S, B } = buildBlocks(d, tplName);
+  const X = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const hp = pt => Math.round(pt * 2);    // half-points
+  const tw = pt => Math.round(pt * 20);   // twips
+  const run = (t, o = {}) => {
+    let rp = '';
+    if (o.b) rp += '<w:b/><w:bCs/>';
+    if (o.sz) rp += `<w:sz w:val="${hp(o.sz)}"/><w:szCs w:val="${hp(o.sz)}"/>`;
+    return `<w:r>${rp ? `<w:rPr>${rp}</w:rPr>` : ''}<w:t xml:space="preserve">${X(t)}</w:t></w:r>`;
+  };
+  const para = (runs, o = {}) => {
+    let pp = '';
+    if (o.keep) pp += '<w:keepNext/>';
+    if (o.bullet) pp += '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>';
+    pp += `<w:spacing w:before="${tw(o.before || 0)}" w:after="${tw(o.after || 0)}"/>`;
+    return `<w:p><w:pPr>${pp}</w:pPr>${runs}</w:p>`;
+  };
+
+  let body = '', gap = 0;
+  B.forEach((b, i) => {
+    const next = B[i + 1], prev = B[i - 1];
+    if (b.t === 'gap'){ gap = S.jobGap; return; }
+    const before = gap; gap = 0;
+    switch (b.t){
+      case 'name':    body += para(run(b.text, { b:true, sz:S.name }), { after:2, keep:true }); break;
+      case 'contact': body += para(run(b.text)); break;
+      case 'heading': body += para(run(b.text, { b:true, sz:S.head }), { before:S.headBefore, after:S.headAfter, keep:true }); break;
+      case 'title':   body += para(run(b.text, { b:true }), { before, keep:true }); break;
+      case 'line':    body += para(run(b.text), { before, keep: !!next && ['line','bullet'].includes(next.t) }); break;
+      case 'para':    body += para(run(b.text), { before }); break;
+      case 'bullet':  body += para(run(b.text), { bullet:true, before: prev && prev.t !== 'bullet' ? 2 : 0, after:1 }); break;
+    }
+  });
+
+  const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const F = S.docx;
+  const title = (atsText(d.name) ? atsText(d.name) + ' ' : '') + 'Resume';
+  return {
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`,
+    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`,
+    'docProps/core.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${X(title)}</dc:title><dc:creator>${X(atsText(d.name))}</dc:creator><dc:language>en-AU</dc:language></cp:coreProperties>`,
+    'word/_rels/document.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>`,
+    'word/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles ${W}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${F}" w:hAnsi="${F}" w:cs="${F}" w:eastAsia="${F}"/><w:color w:val="000000"/><w:sz w:val="${hp(S.body)}"/><w:szCs w:val="${hp(S.body)}"/><w:lang w:val="en-AU"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="${Math.round(240 * S.line)}" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>`,
+    'word/numbering.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:numbering ${W}><w:abstractNum w:abstractNumId="0"><w:multiLevelType w:val="singleLevel"/><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="300" w:hanging="300"/></w:pPr><w:rPr><w:rFonts w:ascii="${F}" w:hAnsi="${F}"/></w:rPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>`,
+    'word/document.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document ${W}><w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1021" w:right="1021" w:bottom="1021" w:left="1021" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr></w:body></w:document>`
+  };
+}
+
+/* Real text PDF built with a standard font (Helvetica or Times), so ATS
+   software reads it exactly like the Word file. No browser print headers. */
+function buildPdf(d, tplName, jsPDF){
+  const { S, B } = buildBlocks(d, tplName);
+  const doc = new jsPDF({ unit:'pt', format:'a4', compress:true });
+  const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight();
+  const M = 51, W = PW - M * 2, BI = 13;   // 18 mm margins, bullet indent
+  const LH = size => size * S.line;
+  let y = M;
+  const font = (bold, size) => { doc.setFont(S.pdf, bold ? 'bold' : 'normal'); doc.setFontSize(size); };
+  const room = h => { if (y + h > PH - M && y > M + 1){ doc.addPage(); y = M; } };
+  const measure = (text, size, bold, width) => { font(bold, size); return doc.splitTextToSize(text, width).length * LH(size); };
+  const write = (text, size = S.body, bold = false) => {
+    font(bold, size);
+    for (const ln of doc.splitTextToSize(text, W)){ room(LH(size)); doc.text(ln, M, y, { baseline:'top' }); y += LH(size); }
+  };
+  // keep a heading or job title with the lines under it and its first bullet
+  const groupHeight = i => {
+    let h = 0;
+    for (let k = i; k < B.length; k++){
+      const b = B[k];
+      if (b.t === 'gap') break;
+      const size = b.t === 'heading' ? S.head : S.body;
+      h += measure(b.text, size, b.t === 'heading' || b.t === 'title', b.t === 'bullet' ? W - BI : W);
+      if (b.t === 'bullet' || b.t === 'para' || (k > i && b.t === 'title')) break;
+    }
+    return h;
+  };
+
+  let gap = 0;
+  B.forEach((b, i) => {
+    if (b.t === 'gap'){ gap = S.jobGap; return; }
+    y += gap; gap = 0;
+    switch (b.t){
+      case 'name':    write(b.text, S.name, true); y += 2; break;
+      case 'contact': write(b.text); break;
+      case 'heading': y += S.headBefore; room(groupHeight(i) + 1); write(b.text, S.head, true); y += S.headAfter; break;
+      case 'title':   room(groupHeight(i)); write(b.text, S.body, true); break;
+      case 'line':
+      case 'para':    write(b.text); break;
+      case 'bullet': {
+        if (B[i - 1] && B[i - 1].t !== 'bullet') y += 2;
+        font(false, S.body);
+        doc.splitTextToSize(b.text, W - BI).forEach((ln, k) => {
+          room(LH(S.body));
+          if (k === 0) doc.text('\u2022', M + 2, y, { baseline:'top' });
+          doc.text(ln, M + BI, y, { baseline:'top' });
+          y += LH(S.body);
+        });
+        y += 1;
+        break;
+      }
+    }
+  });
+
+  const name = atsText(d.name);
+  doc.setProperties({ title: (name ? name + ' ' : '') + 'Resume', subject:'Resume', author:name, creator:'Plainpaper' });
+  if (doc.setLanguage) doc.setLanguage('en-AU');
+  return doc;
+}
+
+function warnIfIncomplete(){
+  const n = atsChecks(data).length;
+  if (n) toast(`Downloaded. The ATS check still lists ${n} thing${n > 1 ? 's' : ''} to fix.`);
+  return n;
+}
+
+$('#btnPdf').addEventListener('click', async e => {
+  const btn = e.currentTarget;
+  busy(btn, true, 'Building');
+  try {
+    await loadScript(LIB_JSPDF);
+    const doc = buildPdf(data, template, window.jspdf.jsPDF);
+    doc.save(fileBase() + '.pdf');
+    if (!warnIfIncomplete()) toast('PDF downloaded.');
+  } catch (err){ console.error(err); toast(err.message || 'Could not build the PDF.', true); }
+  finally { busy(btn, false); }
+});
+
+$('#btnDocx').addEventListener('click', async e => {
+  const btn = e.currentTarget;
+  busy(btn, true, 'Building');
+  try {
+    await loadScript(LIB_JSZIP);
+    const zip = new window.JSZip();
+    const files = buildDocxXml(data, template);
+    for (const [path, xml] of Object.entries(files)) zip.file(path, xml);
+    const blob = await zip.generateAsync({ type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    downloadBlob(blob, fileBase() + '.docx');
+    if (!warnIfIncomplete()) toast('Word file downloaded.');
+  } catch (err){ console.error(err); toast(err.message || 'Could not build the Word file.', true); }
+  finally { busy(btn, false); }
+});
+
+/* ==================================================================
+   Menu: backup / restore / start over
+   ================================================================== */
+const menu = $('#moreMenu');
+document.addEventListener('click', e => { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+menu.addEventListener('click', async e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  menu.open = false;
+  const act = b.dataset.act;
+  if (act === 'import') openImport();
+  if (act === 'backup'){
+    downloadBlob(new Blob([JSON.stringify({ app:'plainpaper', version:1, template, data }, null, 2)], { type:'application/json' }), fileBase() + '.json');
+    toast('Backup saved.');
+  }
+  if (act === 'restore') $('#restoreFile').click();
+  if (act === 'clear'){
+    if (await confirmDialog('Start over?', 'This clears everything you\'ve entered. Save a backup first if you might want it back.', 'Clear everything', true)){
+      data = blank(); $('#skillSuggest').innerHTML = ''; renderEditor(); changed(); toast('Cleared.');
+    }
+  }
+});
+$('#restoreFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const j = JSON.parse(await f.text());
+    const incoming = sanitize(j.data || j);
+    if (!(await confirmDialog('Open this backup?', 'It will replace what\'s currently in the editor.', 'Open backup'))) return;
+    data = incoming;
+    if (TPL_NAMES.includes(j.template)){ template = j.template; lsSet(TPL_KEY, template); $$('input[name="tpl"]').forEach(r => r.checked = r.value === template); }
+    renderEditor(); changed(); toast('Backup opened.');
+  } catch { toast('That file isn\'t a Plainpaper backup.', true); }
+  finally { e.target.value = ''; }
+});
+
+/* ==================================================================
+   Boot
+   ================================================================== */
+renderEditor();
+renderPreview();
+refreshAiBadge();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitPaper);
+window.addEventListener('beforeunload', () => lsSet(STORE_KEY, JSON.stringify(data)));
+
+})();
+</script>
+</body>
+</html>
