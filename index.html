@@ -208,6 +208,11 @@ dialog::backdrop{background:rgba(23,32,43,.45)}
     Plainpaper
   </div>
 
+  <div class="seg" role="radiogroup" aria-label="Document">
+    <label><input type="radio" name="mode" value="resume"><span>Resume</span></label>
+    <label><input type="radio" name="mode" value="letter"><span>Cover letter</span></label>
+  </div>
+
   <div class="seg" role="radiogroup" aria-label="Template">
     <label title="Arial, standard spacing"><input type="radio" name="tpl" value="standard"><span>Standard</span></label>
     <label title="Times New Roman, standard spacing"><input type="radio" name="tpl" value="traditional"><span>Traditional</span></label>
@@ -242,7 +247,8 @@ dialog::backdrop{background:rgba(23,32,43,.45)}
 
 <main class="layout">
   <!-- ================= EDITOR ================= -->
-  <section class="editor" aria-label="Resume editor">
+  <section class="editor" aria-label="Editor">
+   <div id="resumeEditor">
     <div class="start">
       <p><strong>Start from an old resume</strong>Upload a PDF, Word file or photo and Gemini pulls out your details and work history.</p>
       <button class="btn ai" type="button" id="btnImport">Import resume</button>
@@ -305,6 +311,57 @@ dialog::backdrop{background:rgba(23,32,43,.45)}
       </div>
       <div class="suggest" id="skillSuggest"></div>
     </div>
+   </div>
+
+   <!-- ================= COVER LETTER EDITOR ================= -->
+   <div id="letterEditor" hidden>
+    <div class="start" id="letterNeedsResume" hidden>
+      <p><strong>Your resume comes first</strong>The letter is written from your work history. Add at least one job on the resume tab.</p>
+      <button class="btn" type="button" data-goto="resume">Go to resume</button>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>The job</h2></div>
+      <label class="f">Job ad <span class="hint">Paste the whole ad, or at least the duties and requirements.</span>
+        <textarea data-lfield="ad" rows="8"></textarea>
+      </label>
+      <div class="grid2">
+        <label class="f">Job title<input type="text" data-lfield="jobTitle"></label>
+        <label class="f">Company<input type="text" data-lfield="company"></label>
+      </div>
+      <label class="f">Address it to <span class="hint">(optional, e.g. Ms Nguyen)</span>
+        <input type="text" data-lfield="contact" placeholder="Leave blank for Dear Hiring Manager">
+      </label>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><h2>Your letter</h2></div>
+      <div class="grid2">
+        <label class="f">Tone
+          <select data-lfield="tone">
+            <option value="professional">Professional</option>
+            <option value="warm">Warm and friendly</option>
+            <option value="direct">Plain and direct</option>
+          </select>
+        </label>
+        <label class="f">Length
+          <select data-lfield="length">
+            <option value="short">Short, about 200 words</option>
+            <option value="standard">Standard, about 300 words</option>
+            <option value="long">Detailed, about 400 words</option>
+          </select>
+        </label>
+      </div>
+      <div class="item-actions" style="margin:2px 0 14px">
+        <button class="btn ai" type="button" id="btnLetterAi">Write with AI</button>
+        <button class="btn" type="button" id="btnLetterPolish">Polish my draft</button>
+      </div>
+      <label class="f">Letter <span class="hint">Write your own, or let AI draft it. Leave a blank line between paragraphs. The date, greeting and sign-off are added for you.</span>
+        <textarea data-lfield="body" rows="16"></textarea>
+      </label>
+      <p class="hint" id="letterWc" style="margin:0"></p>
+    </div>
+   </div>
   </section>
 
   <!-- ================= PREVIEW ================= -->
@@ -508,9 +565,9 @@ function downloadBlob(blob, filename){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
-function fileBase(){
+function fileBase(kind = 'resume'){
   const n = str(data.name).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
-  return (n ? n + '-' : '') + 'Resume';
+  return (n ? n + '-' : '') + (kind === 'letter' ? 'Cover-Letter' : 'Resume');
 }
 
 function confirmDialog(title, text, okLabel = 'OK', danger = false){
@@ -533,7 +590,8 @@ function confirmDialog(title, text, okLabel = 'OK', danger = false){
 /* ==================================================================
    State
    ================================================================== */
-const blank = () => ({ name:'', email:'', phone:'', suburb:'', state:'', summary:'', skills:[], jobs:[], education:[] });
+const blankLetter = () => ({ jobTitle:'', company:'', contact:'', ad:'', tone:'professional', length:'standard', body:'' });
+const blank = () => ({ name:'', email:'', phone:'', suburb:'', state:'', summary:'', skills:[], jobs:[], education:[], letter: blankLetter() });
 const blankJob = () => ({ id: uid(), title:'', company:'', location:'', start:'', end:'', current:false, duties:'' });
 const blankEdu = () => ({ id: uid(), qualification:'', institution:'', year:'' });
 
@@ -551,11 +609,17 @@ function sanitize(o){
   d.education = arr(o.education).map(e => ({
     id: str(e?.id) || uid(), qualification: str(e?.qualification), institution: str(e?.institution), year: str(e?.year)
   }));
+  const L = (o.letter && typeof o.letter === 'object') ? o.letter : {};
+  for (const k of ['jobTitle','company','contact','ad']) d.letter[k] = str(L[k]);
+  d.letter.body = String(L.body ?? '').replace(/\r/g, '');
+  if (['professional','warm','direct'].includes(L.tone)) d.letter.tone = L.tone;
+  if (['short','standard','long'].includes(L.length)) d.letter.length = L.length;
   return d;
 }
 
 let data = (() => { try { return sanitize(JSON.parse(lsGet(STORE_KEY) || 'null')); } catch { return blank(); } })();
 const TPL_NAMES = ['standard','traditional','compact'];
+let mode = lsGet('plainpaper.mode') === 'letter' ? 'letter' : 'resume';
 let template = (() => {
   const t = lsGet(TPL_KEY);
   if (TPL_NAMES.includes(t)) return t;
@@ -580,6 +644,7 @@ function datesText(j){
 
 function renderFields(){
   $$('[data-field]').forEach(el => { el.value = data[el.dataset.field] || ''; });
+  $$('[data-lfield]').forEach(el => { el.value = data.letter[el.dataset.lfield] || ''; });
 }
 
 function jobSummaryLabel(j){
@@ -744,11 +809,50 @@ function buildBlocks(d, tplName){
   return { S, B };
 }
 
+/* ---------- cover letter (same plain, ATS-safe format) ---------- */
+function wordCount(s){ return str(s).split(/\s+/).filter(Boolean).length; }
+function letterParas(body){
+  return String(body || '').split(/\n\s*\n/).map(p => atsText(p).replace(/\s*\n\s*/g, ' ')).filter(Boolean);
+}
+function letterDate(){ return new Date().toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' }); }
+
+function buildLetterBlocks(d, tplName){
+  const S = TPL[tplName] || TPL.standard;
+  const c = atsText, L = d.letter, P = S.body, B = [];
+  const name = c(d.name);
+  B.push({ t:'name', text: name || 'Your name', ph: !name });
+  const contact = [c([d.suburb, d.state].filter(Boolean).join(' ')), c(d.phone), c(d.email)].filter(Boolean).join(' | ');
+  if (contact) B.push({ t:'contact', text: contact });
+  B.push({ t:'gap', size: P * 1.8 });
+  B.push({ t:'line', text: letterDate() });
+  const to = [c(L.contact), c(L.company)].filter(Boolean);
+  if (to.length){ B.push({ t:'gap', size: P * 1.2 }); to.forEach(x => B.push({ t:'line', text: x })); }
+  if (c(L.jobTitle)){ B.push({ t:'gap', size: P * 1.2 }); B.push({ t:'title', text: 'Re: ' + c(L.jobTitle) }); }
+  B.push({ t:'gap', size: P * 1.2 });
+  B.push({ t:'para', text: `Dear ${c(L.contact) || 'Hiring Manager'},` });
+  const paras = letterParas(L.body);
+  if (!paras.length) paras.push(null);
+  paras.forEach(p => {
+    B.push({ t:'gap', size: P * 0.8 });
+    B.push(p === null
+      ? { t:'para', ph:true, text:'Your letter appears here. Paste the job ad on the left, then write it yourself or use Write with AI.' }
+      : { t:'para', text: p });
+  });
+  B.push({ t:'gap', size: P * 0.8 });
+  B.push({ t:'para', text: 'Kind regards,' });
+  B.push({ t:'gap', size: P * 2 });
+  B.push({ t:'para', text: name || 'Your name', ph: !name });
+  return { S, B };
+}
+
+function modelFor(d, tplName, kind){ return kind === 'letter' ? buildLetterBlocks(d, tplName) : buildBlocks(d, tplName); }
+const KIND_LABEL = { resume:'Resume', letter:'Cover Letter' };
+
 function blocksHTML({ S, B }){
   let h = '', inList = false, gap = 0;
   for (const b of B){
     if (b.t !== 'bullet' && inList){ h += '</ul>'; inList = false; }
-    if (b.t === 'gap'){ gap = S.jobGap; continue; }
+    if (b.t === 'gap'){ gap = b.size ?? S.jobGap; continue; }
     const mt = gap ? `margin-top:${gap}pt;` : ''; gap = 0;
     switch (b.t){
       case 'name':    h += `<h1 class="${b.ph ? 'r-ph' : ''}" style="font-size:${S.name}pt;font-weight:bold;margin-bottom:2pt">${esc(b.text)}</h1>`; break;
@@ -756,7 +860,7 @@ function blocksHTML({ S, B }){
       case 'heading': h += `<h2 style="font-size:${S.head}pt;font-weight:bold;margin:${S.headBefore}pt 0 ${S.headAfter}pt">${esc(b.text)}</h2>`; break;
       case 'title':   h += `<p style="${mt}font-weight:bold">${esc(b.text)}</p>`; break;
       case 'para':
-      case 'line':    h += `<p style="${mt}">${esc(b.text)}</p>`; break;
+      case 'line':    h += `<p class="${b.ph ? 'r-ph' : ''}" style="${mt}">${esc(b.text)}</p>`; break;
       case 'bullet':
         if (!inList){ h += '<ul style="margin-top:2pt;padding-left:15pt">'; inList = true; }
         h += `<li>${esc(b.text)}</li>`; break;
@@ -768,7 +872,7 @@ function blocksHTML({ S, B }){
 
 function renderPreview(){
   const r = $('#resume');
-  const model = buildBlocks(data, template);
+  const model = modelFor(data, template, mode);
   r.style.fontFamily = model.S.css;
   r.style.fontSize = model.S.body + 'pt';
   r.style.lineHeight = model.S.line;
@@ -821,13 +925,38 @@ function atsChecks(d){
     out.push('Some emoji or special symbols were found. They\'re left out of the Word and PDF files, so check nothing important was lost.');
   return out;
 }
+function letterChecks(d){
+  const L = d.letter, out = [];
+  if (!str(d.name) || !str(d.phone) || !str(d.email)) out.push('Add your name, phone and email on the resume tab. They go at the top of the letter.');
+  if (!str(L.ad)) out.push('Paste the job ad so the letter can be matched to what they ask for.');
+  if (!str(L.jobTitle)) out.push('Add the job title you\'re applying for.');
+  if (!str(L.company)) out.push('Add the company name.');
+  const words = wordCount(L.body);
+  if (!words) out.push('Write the letter, or use Write with AI.');
+  else if (words < 150) out.push(`The letter is ${words} words. Aim for at least 150.`);
+  else if (words > 450) out.push(`The letter is ${words} words. Keep it under 450 so it fits on one page.`);
+  if (/\[[^\]]*\]/.test(L.body)) out.push('Replace the text in square brackets.');
+  if (words && str(L.company) && !L.body.toLowerCase().includes(str(L.company).toLowerCase()))
+    out.push(`Mention ${str(L.company)} by name in the letter.`);
+  if (/[^\x00-\xFF\u2018\u2019\u201C\u201D\u2013\u2014\u2022\u2026]/.test(L.body))
+    out.push('Some emoji or special symbols were found. They\'re left out of the Word and PDF files.');
+  return out;
+}
+function checksFor(kind){ return kind === 'letter' ? letterChecks(data) : atsChecks(data); }
+
 function renderAts(){
-  const issues = atsChecks(data);
+  const issues = checksFor(mode);
+  $('#letterNeedsResume').hidden = data.jobs.some(hasJob);
+  const w = wordCount(data.letter.body);
+  $('#letterWc').textContent = w ? `${w} words` : '';
   $('#atsDot').classList.toggle('on', !issues.length);
   $('#atsTitle').textContent = issues.length
     ? `ATS check: ${issues.length} thing${issues.length > 1 ? 's' : ''} to fix`
     : 'ATS check: ready to send';
-  $('#atsNote').textContent = 'Output is always single column, plain text in ' + (template === 'traditional' ? 'Times New Roman' : 'Arial') + ', with standard headings and no tables, columns, graphics, colour, headers or footers.';
+  const font = template === 'traditional' ? 'Times New Roman' : 'Arial';
+  $('#atsNote').textContent = mode === 'letter'
+    ? `Same plain format as your resume: ${font}, no tables, graphics, colour, headers or footers. Keep it to one page.`
+    : `Output is always single column, plain text in ${font}, with standard headings and no tables, columns, graphics, colour, headers or footers.`;
   $('#atsList').innerHTML = issues.map(i => `<li>${esc(i)}</li>`).join('');
 }
 
@@ -943,6 +1072,23 @@ $$('.mobile-tabs button').forEach(b => b.addEventListener('click', () => {
   $$('.mobile-tabs button').forEach(x => x.setAttribute('aria-pressed', x === b));
   if (b.dataset.view === 'preview') requestAnimationFrame(fitPaper);
 }));
+
+/* ---------- resume / cover letter switch ---------- */
+function setMode(m){
+  mode = m === 'letter' ? 'letter' : 'resume';
+  lsSet('plainpaper.mode', mode);
+  $('#resumeEditor').hidden = mode !== 'resume';
+  $('#letterEditor').hidden = mode !== 'letter';
+  $$('input[name="mode"]').forEach(r => r.checked = r.value === mode);
+  $('.editor').scrollTop = 0;
+  renderPreview();
+}
+$$('input[name="mode"]').forEach(r => r.addEventListener('change', () => setMode(r.value)));
+$$('[data-goto]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.goto)));
+
+$$('[data-lfield]').forEach(el => {
+  el.addEventListener('input', () => { data.letter[el.dataset.lfield] = el.value; changed(); });
+});
 
 /* ==================================================================
    Gemini
@@ -1115,6 +1261,123 @@ ${workHistoryText()}`;
     box.innerHTML = list.length
       ? `<span class="hint" style="width:100%">Click a suggestion to add it:</span>` + list.map(s => `<button type="button" data-skill="${esc(s)}">+ ${esc(s)}</button>`).join('')
       : `<span class="hint">No new suggestions this time.</span>`;
+  } catch (err){ handleAiError(err); }
+  finally { busy(btn, false); }
+});
+
+/* ---------- cover letter AI ---------- */
+const LETTER_LENGTH = { short:'180 to 220 words', standard:'270 to 330 words', long:'370 to 430 words' };
+const LETTER_TONE = {
+  professional: 'professional and confident',
+  warm: 'warm, friendly and genuine, while still professional',
+  direct: 'plain and direct, with short sentences and no fluff'
+};
+
+function resumeContext(){
+  const place = [data.suburb, data.state].filter(Boolean).join(' ');
+  return [
+    `Name: ${data.name || '(not given)'}`,
+    place ? `Location: ${place}` : '',
+    data.summary ? `Summary: ${data.summary}` : '',
+    `Work history:\n${workHistoryText() || '(none given)'}`,
+    data.education.some(hasEdu) ? `Education, tickets and licences:\n${data.education.filter(hasEdu).map(e => '- ' + [e.qualification, e.institution, e.year].filter(Boolean).join(', ')).join('\n')}` : '',
+    data.skills.length ? `Skills: ${data.skills.join(', ')}` : ''
+  ].filter(Boolean).join('\n\n');
+}
+
+const LETTER_STYLE_RULES = `- Australian English. Plain text only: no emoji, bullet points, markdown, curly quotes or long dashes.
+- Only use facts from the resume. Never invent experience, qualifications, licences, numbers or results. If the ad asks for something the resume doesn't show, don't claim it.
+- No greeting ("Dear ...") and no sign-off ("Kind regards", name); those are added separately.
+- No placeholders such as [Company] or [date].
+- Avoid clichés: "I am writing to express my interest", "passionate", "dynamic", "go-getter", "results-driven", "team player", "hit the ground running".`;
+
+function cleanParas(list){
+  const name = str(data.name).toLowerCase();
+  return arr(list).map(str).filter(p => p
+    && !/^(dear\b|kind regards|warm regards|best regards|regards,?$|yours (sincerely|faithfully|truly)|sincerely,?$)/i.test(p)
+    && p.toLowerCase() !== name);
+}
+
+$('#btnLetterAi').addEventListener('click', async e => {
+  const btn = e.currentTarget, L = data.letter;
+  if (!str(L.ad) && !str(L.jobTitle)){ toast('Paste the job ad first, or at least enter the job title.'); return; }
+  if (!data.jobs.some(hasJob)){ toast('Add your work history on the resume tab first. The letter is written from it.'); return; }
+  if (!aiReady()){ handleAiError(new NeedsSetup()); return; }
+  if (str(L.body) && !(await confirmDialog('Replace your letter?', 'Write with AI starts a fresh letter. To keep what you wrote and just improve it, use Polish my draft instead.', 'Replace letter'))) return;
+  busy(btn, true, 'Writing');
+  try {
+    const prompt = `Write the body of a cover letter for an Australian job application.
+
+Return JSON only: {"jobTitle": string, "company": string, "contactName": string, "paragraphs": [string]}
+- jobTitle and company: taken from the job ad, or as given below.
+- contactName: the person to address, as title and surname (e.g. "Ms Nguyen"), only if the ad names a contact person. Otherwise "".
+- paragraphs: 3 to 5 paragraphs, ${LETTER_LENGTH[L.length] || LETTER_LENGTH.standard} in total.
+
+How to write it:
+- Tone: ${LETTER_TONE[L.tone] || LETTER_TONE.professional}.
+- Opening: name the role and the company, and give one specific, genuine reason this applicant suits it.
+- Middle: take the ad's main requirements and match each to real experience from the resume. Use the ad's own keywords where the resume supports them, because the letter may be screened by ATS software. Be concrete: name employers, tasks, equipment, tickets and licences.
+- Close: availability and interest, and a simple request for an interview or a chat.
+${LETTER_STYLE_RULES}
+
+Job title (if given): ${L.jobTitle || '(not given)'}
+Company (if given): ${L.company || '(not given)'}
+Job ad:
+----
+${L.ad || '(no ad text given, write from the job title)'}
+----
+
+Applicant's resume:
+${resumeContext()}`;
+    const out = parseJSON(await callGemini([{ text: prompt }], { json: true, temperature: 0.7 }));
+    const paras = cleanParas(Array.isArray(out) ? out : out.paragraphs);
+    if (!paras.length) throw new Error('The AI didn\'t return a letter. Try again or pick a different model.');
+    L.body = paras.join('\n\n');
+    if (!str(L.jobTitle) && str(out.jobTitle)) L.jobTitle = str(out.jobTitle);
+    if (!str(L.company) && str(out.company)) L.company = str(out.company);
+    if (!str(L.contact) && str(out.contactName)) L.contact = str(out.contactName);
+    renderFields(); changed();
+    toast('Letter drafted. Read it through and make it sound like you.');
+  } catch (err){ handleAiError(err); }
+  finally { busy(btn, false); }
+});
+
+$('#btnLetterPolish').addEventListener('click', async e => {
+  const btn = e.currentTarget, L = data.letter;
+  if (!letterParas(L.body).length){ toast('Write a draft first, even a rough one. Or use Write with AI.'); return; }
+  busy(btn, true, 'Polishing');
+  try {
+    const prompt = `Polish this cover letter draft for an Australian job application.
+
+Return JSON only: {"paragraphs": [string]}
+
+What to do:
+- Fix spelling, grammar and flow, and tighten wordy sentences.
+- Keep the writer's own voice, structure and every fact. Don't add new claims.
+- Where the draft or the resume genuinely supports it, use the job ad's own keywords so ATS screening picks them up.
+- Aim for ${LETTER_LENGTH[L.length] || LETTER_LENGTH.standard}, but don't pad a short draft with made-up content.
+${LETTER_STYLE_RULES}
+
+Job title: ${L.jobTitle || '(not given)'}
+Company: ${L.company || '(not given)'}
+Job ad:
+----
+${L.ad || '(not given)'}
+----
+
+Applicant's resume (for fact checking only):
+${resumeContext()}
+
+Draft:
+----
+${L.body}
+----`;
+    const out = parseJSON(await callGemini([{ text: prompt }], { json: true, temperature: 0.4 }));
+    const paras = cleanParas(Array.isArray(out) ? out : out.paragraphs);
+    if (!paras.length) throw new Error('The AI didn\'t return a letter. Try again.');
+    L.body = paras.join('\n\n');
+    renderFields(); changed();
+    toast('Letter polished.');
   } catch (err){ handleAiError(err); }
   finally { busy(btn, false); }
 });
@@ -1374,8 +1637,8 @@ $('#impApply').addEventListener('click', () => {
    ================================================================== */
 const LIB_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 
-function buildDocxXml(d, tplName){
-  const { S, B } = buildBlocks(d, tplName);
+function buildDocxXml(d, tplName, kind = 'resume'){
+  const { S, B } = modelFor(d, tplName, kind);
   const X = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const hp = pt => Math.round(pt * 2);    // half-points
   const tw = pt => Math.round(pt * 20);   // twips
@@ -1396,7 +1659,7 @@ function buildDocxXml(d, tplName){
   let body = '', gap = 0;
   B.forEach((b, i) => {
     const next = B[i + 1], prev = B[i - 1];
-    if (b.t === 'gap'){ gap = S.jobGap; return; }
+    if (b.t === 'gap'){ gap = b.size ?? S.jobGap; return; }
     const before = gap; gap = 0;
     switch (b.t){
       case 'name':    body += para(run(b.text, { b:true, sz:S.name }), { after:2, keep:true }); break;
@@ -1411,7 +1674,7 @@ function buildDocxXml(d, tplName){
 
   const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
   const F = S.docx;
-  const title = (atsText(d.name) ? atsText(d.name) + ' ' : '') + 'Resume';
+  const title = (atsText(d.name) ? atsText(d.name) + ' ' : '') + KIND_LABEL[kind];
   return {
     '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`,
@@ -1432,8 +1695,8 @@ function buildDocxXml(d, tplName){
 
 /* Real text PDF built with a standard font (Helvetica or Times), so ATS
    software reads it exactly like the Word file. No browser print headers. */
-function buildPdf(d, tplName, jsPDF){
-  const { S, B } = buildBlocks(d, tplName);
+function buildPdf(d, tplName, jsPDF, kind = 'resume'){
+  const { S, B } = modelFor(d, tplName, kind);
   const doc = new jsPDF({ unit:'pt', format:'a4', compress:true });
   const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight();
   const M = 51, W = PW - M * 2, BI = 13;   // 18 mm margins, bullet indent
@@ -1461,7 +1724,7 @@ function buildPdf(d, tplName, jsPDF){
 
   let gap = 0;
   B.forEach((b, i) => {
-    if (b.t === 'gap'){ gap = S.jobGap; return; }
+    if (b.t === 'gap'){ gap = b.size ?? S.jobGap; return; }
     y += gap; gap = 0;
     switch (b.t){
       case 'name':    write(b.text, S.name, true); y += 2; break;
@@ -1486,24 +1749,31 @@ function buildPdf(d, tplName, jsPDF){
   });
 
   const name = atsText(d.name);
-  doc.setProperties({ title: (name ? name + ' ' : '') + 'Resume', subject:'Resume', author:name, creator:'Plainpaper' });
+  doc.setProperties({ title: (name ? name + ' ' : '') + KIND_LABEL[kind], subject: KIND_LABEL[kind], author:name, creator:'Plainpaper' });
   if (doc.setLanguage) doc.setLanguage('en-AU');
   return doc;
 }
 
 function warnIfIncomplete(){
-  const n = atsChecks(data).length;
-  if (n) toast(`Downloaded. The ATS check still lists ${n} thing${n > 1 ? 's' : ''} to fix.`);
+  const n = checksFor(mode).length;
+  if (n) toast(`Downloaded. The check under the preview still lists ${n} thing${n > 1 ? 's' : ''} to fix.`);
   return n;
+}
+function readyToExport(){
+  if (mode === 'letter' && !letterParas(data.letter.body).length){
+    toast('Write the letter first, or use Write with AI.', true); return false;
+  }
+  return true;
 }
 
 $('#btnPdf').addEventListener('click', async e => {
   const btn = e.currentTarget;
+  if (!readyToExport()) return;
   busy(btn, true, 'Building');
   try {
     await loadScript(LIB_JSPDF);
-    const doc = buildPdf(data, template, window.jspdf.jsPDF);
-    doc.save(fileBase() + '.pdf');
+    const doc = buildPdf(data, template, window.jspdf.jsPDF, mode);
+    doc.save(fileBase(mode) + '.pdf');
     if (!warnIfIncomplete()) toast('PDF downloaded.');
   } catch (err){ console.error(err); toast(err.message || 'Could not build the PDF.', true); }
   finally { busy(btn, false); }
@@ -1511,14 +1781,15 @@ $('#btnPdf').addEventListener('click', async e => {
 
 $('#btnDocx').addEventListener('click', async e => {
   const btn = e.currentTarget;
+  if (!readyToExport()) return;
   busy(btn, true, 'Building');
   try {
     await loadScript(LIB_JSZIP);
     const zip = new window.JSZip();
-    const files = buildDocxXml(data, template);
+    const files = buildDocxXml(data, template, mode);
     for (const [path, xml] of Object.entries(files)) zip.file(path, xml);
     const blob = await zip.generateAsync({ type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-    downloadBlob(blob, fileBase() + '.docx');
+    downloadBlob(blob, fileBase(mode) + '.docx');
     if (!warnIfIncomplete()) toast('Word file downloaded.');
   } catch (err){ console.error(err); toast(err.message || 'Could not build the Word file.', true); }
   finally { busy(btn, false); }
@@ -1562,7 +1833,7 @@ $('#restoreFile').addEventListener('change', async e => {
    Boot
    ================================================================== */
 renderEditor();
-renderPreview();
+setMode(mode);
 refreshAiBadge();
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitPaper);
 window.addEventListener('beforeunload', () => lsSet(STORE_KEY, JSON.stringify(data)));
