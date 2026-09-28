@@ -1181,9 +1181,80 @@ function handleAiError(err){
   }
 }
 
+/* ==================================================================
+   Writing voice
+   Every AI writing task (summary, bullets, cover letter, polish) gets
+   this guide so the output reads like a capable person wrote it, not
+   a language model. A second pass catches common AI tells that slip
+   through and rewrites just those sentences.
+   ================================================================== */
+const VOICE_GUIDE = `WRITING VOICE. Follow this closely. Sounding real matters more than sounding impressive.
+
+Who is writing: the applicant themselves, on a good day. A capable, honest person who knows their work and is describing it to a manager they respect. Not a recruiter, not a marketer, not an AI. The reader is a busy hiring manager or supervisor who reads dozens of these, is tired of generic applications, and can spot generated text in one line. Write so they'd never suspect it.
+
+Sound like a real person:
+- Use plain, everyday words. "Used" not "utilised". "Helped" not "facilitated". "Ran" or "led" not "spearheaded". "Worked with" not "collaborated cross-functionally". If a word would sound odd said out loud to a supervisor, don't write it.
+- Specifics beat adjectives. "Patched potholes and replaced culverts on gravel shire roads" says far more than "delivered high-quality infrastructure maintenance". "Set up the new rostering system and showed the team how to use it" beats "implemented innovative workforce solutions". Name the actual tasks, equipment, software, places, customers and tickets from the source material.
+- Show, don't claim. Don't call the person hardworking, reliable, detail-oriented, passionate or a quick learner. Describe something they actually did that shows it, or leave it out.
+- Vary sentence length and shape. Mix short sentences with longer ones. Don't start two sentences in a row the same way. Don't start every sentence with "I".
+- Be modest and direct, the way Australians usually are. Quiet confidence is good. Boasting, gushing, flattery and sales talk are not. No exclamation marks.
+- A slightly plain, genuine sentence is better than a polished, empty one. Real writing isn't perfectly balanced or symmetrical, and that's fine.
+- Say each thing once. Don't restate, over-explain or justify.
+- Only use numbers that appear in the source. Never invent percentages, dollar amounts, team sizes, years or results to make something sound better.
+
+Avoid the tells of AI-written text:
+- Words and phrases: delve, leverage, utilise, spearhead, synergy, robust, seamless, dynamic, passionate, meticulous, adept, proficient, navigate (unless literally driving), landscape, realm, tapestry, testament, elevate, foster, pivotal, crucial, vital, invaluable, showcase, underscore, streamline, holistic, cutting-edge, innovative, thrive, ever-evolving, fast-paced environment, esteemed, keen interest, resonate, align with your values, commitment to excellence, proven track record, strong work ethic, wealth of experience, seasoned, results-driven, go-getter, team player, hit the ground running, self-starter, think outside the box, above and beyond.
+- Openers and linking words: "I am writing to express my interest", "I am excited to apply", "I am confident that", "I believe I would be a great fit", "With a background in", "As a highly motivated", "In today's", "Furthermore", "Moreover", "Additionally", "In conclusion", "Ultimately".
+- Patterns: grouping everything in threes; "not only X but also Y"; "whether it's X or Y"; "from X to Y" used as a flourish; rhetorical questions; a closing sentence that just sums up what was already said; echoing the job ad back word for word; em dashes or semicolons used for dramatic effect.
+
+Keywords still matter because applications are often screened by ATS software. Use the job ad's real terms (job titles, licences, equipment, software, duties) wherever they are true for this person, but work them into normal sentences. Never stuff them in.
+
+Format: Australian English spelling. Plain text only. No emoji, markdown, bullet symbols, curly quotes or long dashes. Use commas, full stops and plain hyphens.`;
+
+const AI_TELLS = ['delve','leverag','utilis','utiliz','spearhead','synerg','robust','seamless','dynamic','passionate','passion for','meticulous','adept','proficient','landscape','realm','tapestry','testament','elevat','foster','pivotal','invaluable','showcas','underscor','streamlin','holistic','cutting-edge','innovative','thrive','ever-evolving','fast-paced','esteemed','keen interest','resonat','align with','commitment to excellence','proven track record','strong work ethic','wealth of experience','seasoned','results-driven','go-getter','team player','hit the ground running','self-starter','outside the box','above and beyond','i am writing to','i am excited to','i am confident that','i believe i would be','furthermore','moreover','additionally','in conclusion','ultimately','not only'];
+
+function findTells(text){
+  const t = String(text || '').toLowerCase();
+  return AI_TELLS.filter(w => new RegExp('\\b' + w.replace(/[- ]/g, '[- ]')).test(t));
+}
+
+/* light, safe clean-up of AI text before it lands in the editor */
+function humanise(s){
+  return String(s ?? '')
+    .replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"')
+    .replace(/\s+[\u2013\u2014]\s+/g, ', ')
+    .replace(/\u2014/g, ', ')
+    .replace(/!/g, '.')
+    .replace(/,\s*,/g, ',')
+    .replace(/ {2,}/g, ' ')
+    .trim();
+}
+
+/* If AI tells slipped through (and weren't already in the person's own
+   material), ask for a targeted rewrite of just those sentences. */
+async function fixTells(items, source, what){
+  const inSource = new Set(findTells(source));
+  const hits = [...new Set(findTells(items.join('\n')).filter(w => !inSource.has(w)))];
+  if (!hits.length) return items;
+  try {
+    const prompt = `Below is ${what}, as a JSON array of strings. Some of it reads as AI-written because it uses these words or patterns: ${hits.map(h => '"' + h + '"').join(', ')}.
+
+Rewrite only the sentences that contain them, using plain, natural wording a real person would use. Leave every other sentence exactly as it is. Keep every fact, keep the same number of strings in the same order, and don't add anything new.
+
+${VOICE_GUIDE}
+
+Return a JSON array of strings only.
+
+${JSON.stringify(items)}`;
+    const out = parseJSON(await callGemini([{ text: prompt }], { json: true, temperature: 0.3 }));
+    const fixed = arr(Array.isArray(out) ? out : (out.items || out.paragraphs || out.bullets)).map(s => humanise(str(s))).filter(Boolean);
+    return fixed.length === items.length ? fixed : items;
+  } catch { return items; }
+}
+
 function workHistoryText(){
   return data.jobs.filter(hasJob).map(j =>
-    `- ${j.title || 'Role'} at ${j.company || 'employer'} (${datesText(j) || 'dates not given'})${j.duties ? '\n  ' + dutyLines(j).join('\n  ') : ''}`
+    `- ${j.title || 'Role'} at ${j.company || 'employer'}${j.location ? ', ' + j.location : ''} (${datesText(j) || 'dates not given'})${j.duties ? '\n  ' + dutyLines(j).join('\n  ') : ''}`
   ).join('\n');
 }
 
@@ -1195,22 +1266,32 @@ $('#btnSummary').addEventListener('click', async e => {
   }
   busy(btn, true, 'Writing');
   try {
-    const prompt = `Write a professional resume summary for an Australian job seeker.
-Rules: 2 to 4 sentences, under 70 words. Australian English spelling. No first-person pronouns ("I", "my").
-Avoid clichés such as "results-driven", "passionate", "team player", "go-getter". Do not invent qualifications, employers, years or numbers.
-Plain text only: no emoji, no bullet symbols, no markdown, straight quotes and plain hyphens.
-Return only the summary text, no heading, no quotes.
+    const prompt = `TASK: Write the short summary that sits at the top of this person's resume.
+
+What a good one looks like:
+- 2 to 4 sentences, 45 to 75 words.
+- Written the way resumes are: no "I", "me" or "my", and not in the third person either (never their name, "he", "she" or "they"). Start with what they are or do, for example "Civil labourer with three years on local government road crews" or "Retail supervisor who has run stock control and rosters for a busy suburban store", but only claim years if the dates support it.
+- First sentence: what they do now or do best, in plain terms.
+- Next one or two: the specific kinds of work, equipment, settings or tickets they know, taken from the work history. Pick the few that matter most, don't list everything.
+- Optional last sentence: the kind of role or next step they're after, said simply. No grand ambitions.
+- No soft-skill lists and no strings of adjectives. It should read like a supervisor describing a good worker, not like an ad.
+- If there's a current draft, keep what's true and personal in it and improve the wording rather than replacing it.
+
+Return only the summary text. No heading, quotes or notes.
+
+${VOICE_GUIDE}
 
 Work history:
 ${workHistoryText() || '(none given)'}
 
 Skills: ${data.skills.join(', ') || '(none given)'}
-${data.summary ? `\nTheir current draft, improve it rather than starting over:\n${data.summary}` : ''}`;
-    const text = await callGemini([{ text: prompt }], { temperature: 0.6 });
-    data.summary = text.replace(/^["“]|["”]$/g, '').replace(/^summary:\s*/i, '').trim();
+${data.summary ? `\nTheir current draft:\n${data.summary}` : ''}`;
+    let text = humanise((await callGemini([{ text: prompt }], { temperature: 0.7 })).replace(/^["']|["']$/g, '').replace(/^summary:\s*/i, ''));
+    [text] = await fixTells([text], workHistoryText() + ' ' + data.skills.join(' ') + ' ' + data.summary, 'a resume summary');
+    data.summary = text;
     $('[data-field="summary"]').value = data.summary;
     changed();
-    toast('Summary written. Edit it to sound like you.');
+    toast('Summary written. Read it and change anything that doesn\'t sound like you.');
   } catch (err){ handleAiError(err); }
   finally { busy(btn, false); }
 });
@@ -1220,17 +1301,30 @@ async function aiTidy(job, btn){
   if (!dutyLines(job).length){ toast('Add a few duties first, even rough notes work.'); return; }
   busy(btn, true, 'Tidying');
   try {
-    const prompt = `Rewrite these job duties as 3 to 6 concise resume bullet points.
-Role: ${job.title || 'unknown'} at ${job.company || 'unknown'}${job.current ? ' (current job, use present tense)' : ' (past job, use past tense)'}.
-Rules: start each bullet with a strong verb, Australian English, one line each, keep every real fact, and never add numbers, tools or claims that aren't in the notes. No full stops at the end.
-Plain text only: no emoji, no bullet symbols, no markdown, straight quotes and plain hyphens. Use the words employers put in job ads (e.g. "operated a plate compactor", not "ran the wacker").
+    const notes = dutyLines(job).join('\n');
+    const prompt = `TASK: Turn these rough notes into resume bullet points for one job.
+
+Role: ${job.title || 'unknown'} at ${job.company || 'unknown'}. ${job.current ? 'This is their current job, so write in the present tense ("Install", "Run").' : 'This is a past job, so write in the past tense ("Installed", "Ran").'}
+
+What good bullets look like:
+- 3 to 6 bullets, most important or most skilled work first.
+- One line each, roughly 6 to 18 words, and let the lengths vary naturally.
+- Start each with a plain, accurate verb and don't repeat an opening verb. Ordinary verbs are best: built, fixed, installed, ran, handled, trained, checked, served, prepared, looked after, kept, set up, sorted out, dealt with, drove, operated, cleaned, organised. Avoid inflated ones like spearheaded, orchestrated, championed, drove growth, leveraged, optimised.
+- Say what they actually did and, where the notes give it, what it was for or who it helped. Only include a number or result if it's in the notes.
+- Use the proper trade or industry name for things, the way a job ad would name them, inside a natural sentence. For example "Operated a plate compactor and roller on road repairs", not "Leveraged compaction equipment to optimise outcomes".
+- Merge notes that say the same thing. Don't pad with generic duties the notes don't mention, and don't turn simple tasks into grand achievements.
+- No full stops at the end of bullets. No bullet symbols.
+
+${VOICE_GUIDE}
+
 Return a JSON array of strings only.
 
 Notes:
-${dutyLines(job).join('\n')}`;
-    const out = parseJSON(await callGemini([{ text: prompt }], { json: true, temperature: 0.4 }));
-    const lines = arr(Array.isArray(out) ? out : out.bullets || out.duties).map(str).filter(Boolean);
+${notes}`;
+    const out = parseJSON(await callGemini([{ text: prompt }], { json: true, temperature: 0.5 }));
+    let lines = arr(Array.isArray(out) ? out : out.bullets || out.duties).map(s => humanise(str(s)).replace(/\.$/, '')).filter(Boolean);
     if (!lines.length) throw new Error('The AI didn\'t return any bullet points. Try again.');
+    lines = await fixTells(lines, notes, 'the bullet points for one job on a resume');
     job.duties = lines.join('\n');
     const ta = $(`#jobs .item[data-id="${job.id}"] [data-k="duties"]`);
     if (ta) ta.value = job.duties;
@@ -1246,17 +1340,22 @@ $('#btnSkills').addEventListener('click', async e => {
   if (!data.jobs.some(hasJob)){ toast('Add your work history first, so suggestions fit your experience.'); return; }
   busy(btn, true, 'Thinking');
   try {
-    const prompt = `Suggest up to 10 skills for this person's resume, based only on their work history.
-Mix practical/technical skills with a few transferable ones. Each skill is 1 to 4 words, Australian English.
-Use the standard wording found in job ads and licence names so ATS keyword matching picks them up. Plain text only, no emoji or symbols.
-Do not repeat any of these existing skills: ${data.skills.join(', ') || '(none)'}.
+    const prompt = `TASK: Suggest up to 10 skills for this person's resume, based only on what their work history shows they can do.
+
+- Mostly hard, practical skills: tasks, equipment, software, methods, licences and tickets. At most two transferable skills, and only if the history clearly shows them.
+- Write them the way they appear in job ads and on licence cards, so ATS keyword matching picks them up. Each is 1 to 4 words.
+- No personality traits or buzzwords (not "Hardworking", "Attention to detail", "Passionate", "Dynamic team player").
+- Don't suggest licences or tickets unless the history mentions them.
+- Australian English. Plain text only.
+- Don't repeat any of these existing skills: ${data.skills.join(', ') || '(none)'}.
+
 Return a JSON array of strings only.
 
 Work history:
 ${workHistoryText()}`;
     const out = parseJSON(await callGemini([{ text: prompt }], { json: true, temperature: 0.5 }));
     const have = new Set(data.skills.map(s => s.toLowerCase()));
-    const list = arr(Array.isArray(out) ? out : out.skills).map(str).filter(s => s && !have.has(s.toLowerCase()));
+    const list = arr(Array.isArray(out) ? out : out.skills).map(s => humanise(str(s))).filter(s => s && !have.has(s.toLowerCase()) && !findTells(s).length);
     const box = $('#skillSuggest');
     box.innerHTML = list.length
       ? `<span class="hint" style="width:100%">Click a suggestion to add it:</span>` + list.map(s => `<button type="button" data-skill="${esc(s)}">+ ${esc(s)}</button>`).join('')
@@ -1268,16 +1367,16 @@ ${workHistoryText()}`;
 /* ---------- cover letter AI ---------- */
 const LETTER_LENGTH = { short:'180 to 220 words', standard:'270 to 330 words', long:'370 to 430 words' };
 const LETTER_TONE = {
-  professional: 'professional and confident',
-  warm: 'warm, friendly and genuine, while still professional',
-  direct: 'plain and direct, with short sentences and no fluff'
+  professional: 'Professional but human: polite, clear and quietly confident, like a well-written email to a manager you haven\'t met yet.',
+  warm: 'Warm and friendly: a bit more personal and conversational, with some genuine personality, while still respectful.',
+  direct: 'Plain and direct: short sentences, straight to the point, no warm-up and no fluff. The way a practical person talks when they want the job.'
 };
 
 function resumeContext(){
   const place = [data.suburb, data.state].filter(Boolean).join(' ');
   return [
     `Name: ${data.name || '(not given)'}`,
-    place ? `Location: ${place}` : '',
+    place ? `Lives in: ${place}` : '',
     data.summary ? `Summary: ${data.summary}` : '',
     `Work history:\n${workHistoryText() || '(none given)'}`,
     data.education.some(hasEdu) ? `Education, tickets and licences:\n${data.education.filter(hasEdu).map(e => '- ' + [e.qualification, e.institution, e.year].filter(Boolean).join(', ')).join('\n')}` : '',
@@ -1285,16 +1384,15 @@ function resumeContext(){
   ].filter(Boolean).join('\n\n');
 }
 
-const LETTER_STYLE_RULES = `- Australian English. Plain text only: no emoji, bullet points, markdown, curly quotes or long dashes.
-- Only use facts from the resume. Never invent experience, qualifications, licences, numbers or results. If the ad asks for something the resume doesn't show, don't claim it.
-- No greeting ("Dear ...") and no sign-off ("Kind regards", name); those are added separately.
-- No placeholders such as [Company] or [date].
-- Avoid clichés: "I am writing to express my interest", "passionate", "dynamic", "go-getter", "results-driven", "team player", "hit the ground running".`;
+const LETTER_RULES = `Hard rules:
+- Only use facts from the resume and the job ad. Never invent experience, qualifications, licences, numbers, results, a start date or availability. If the ad asks for something the resume doesn't show, leave it out, or if it fits naturally, say honestly that they're willing to get it. Never claim it.
+- Don't include a greeting, sign-off, name, date or address. Those are added separately.
+- No placeholders such as [Company] or [date].`;
 
 function cleanParas(list){
   const name = str(data.name).toLowerCase();
-  return arr(list).map(str).filter(p => p
-    && !/^(dear\b|kind regards|warm regards|best regards|regards,?$|yours (sincerely|faithfully|truly)|sincerely,?$)/i.test(p)
+  return arr(list).map(s => humanise(str(s))).filter(p => p
+    && !/^(dear\b|kind regards|warm regards|best regards|regards,?$|yours (sincerely|faithfully|truly)|sincerely,?$|thank you,?$|cheers,?$)/i.test(p)
     && p.toLowerCase() !== name);
 }
 
@@ -1306,19 +1404,28 @@ $('#btnLetterAi').addEventListener('click', async e => {
   if (str(L.body) && !(await confirmDialog('Replace your letter?', 'Write with AI starts a fresh letter. To keep what you wrote and just improve it, use Polish my draft instead.', 'Replace letter'))) return;
   busy(btn, true, 'Writing');
   try {
-    const prompt = `Write the body of a cover letter for an Australian job application.
+    const prompt = `TASK: Write the body of a cover letter from this person, for the job below.
 
 Return JSON only: {"jobTitle": string, "company": string, "contactName": string, "paragraphs": [string]}
-- jobTitle and company: taken from the job ad, or as given below.
+- jobTitle and company: from the job ad, or as given below.
 - contactName: the person to address, as title and surname (e.g. "Ms Nguyen"), only if the ad names a contact person. Otherwise "".
 - paragraphs: 3 to 5 paragraphs, ${LETTER_LENGTH[L.length] || LETTER_LENGTH.standard} in total.
 
-How to write it:
-- Tone: ${LETTER_TONE[L.tone] || LETTER_TONE.professional}.
-- Opening: name the role and the company, and give one specific, genuine reason this applicant suits it.
-- Middle: take the ad's main requirements and match each to real experience from the resume. Use the ad's own keywords where the resume supports them, because the letter may be screened by ATS software. Be concrete: name employers, tasks, equipment, tickets and licences.
-- Close: availability and interest, and a simple request for an interview or a chat.
-${LETTER_STYLE_RULES}
+Tone: ${LETTER_TONE[L.tone] || LETTER_TONE.professional}
+
+Write in the first person, as the applicant. Contractions like I've, I'm and I'd are good, because they make it sound like a person talking.
+
+How a real, good cover letter goes:
+- Opening: say which role you're applying for and give one real, specific reason you suit it or why it appeals, drawn from your actual background. Get to the point in the first sentence or two. No throat-clearing about how excited or honoured you are.
+- Middle (one to three paragraphs): pick the two or three things the ad cares about most. For each, point to something concrete this person has actually done: the employer, the kind of work, the equipment, the setting. One good example per point is plenty. Don't retell the whole resume, and don't march through the ad requirement by requirement like a checklist.
+- If there's a genuine reason this employer or location suits them (they already live nearby, they've worked for a similar organisation, the work matches what they want to do more of), mention it briefly. Don't flatter the company with generic praise.
+- Close: short and plain. Say they'd be glad to talk more, and mention availability only if it's given. No "I look forward to the opportunity to contribute to your esteemed organisation".
+- Each paragraph does one job. Let paragraph lengths vary a little; real letters aren't perfectly even.
+- It should read like this person wrote it on a good day, not like a template with the blanks filled in. Someone who knows them should recognise their voice.
+
+${LETTER_RULES}
+
+${VOICE_GUIDE}
 
 Job title (if given): ${L.jobTitle || '(not given)'}
 Company (if given): ${L.company || '(not given)'}
@@ -1329,15 +1436,16 @@ ${L.ad || '(no ad text given, write from the job title)'}
 
 Applicant's resume:
 ${resumeContext()}`;
-    const out = parseJSON(await callGemini([{ text: prompt }], { json: true, temperature: 0.7 }));
-    const paras = cleanParas(Array.isArray(out) ? out : out.paragraphs);
+    const out = parseJSON(await callGemini([{ text: prompt }], { json: true, temperature: 0.8 }));
+    let paras = cleanParas(Array.isArray(out) ? out : out.paragraphs);
     if (!paras.length) throw new Error('The AI didn\'t return a letter. Try again or pick a different model.');
+    paras = await fixTells(paras, resumeContext() + ' ' + L.ad, 'the paragraphs of a cover letter');
     L.body = paras.join('\n\n');
     if (!str(L.jobTitle) && str(out.jobTitle)) L.jobTitle = str(out.jobTitle);
     if (!str(L.company) && str(out.company)) L.company = str(out.company);
     if (!str(L.contact) && str(out.contactName)) L.contact = str(out.contactName);
     renderFields(); changed();
-    toast('Letter drafted. Read it through and make it sound like you.');
+    toast('Letter drafted. Read it out loud and change anything that doesn\'t sound like you.');
   } catch (err){ handleAiError(err); }
   finally { busy(btn, false); }
 });
@@ -1347,16 +1455,21 @@ $('#btnLetterPolish').addEventListener('click', async e => {
   if (!letterParas(L.body).length){ toast('Write a draft first, even a rough one. Or use Write with AI.'); return; }
   busy(btn, true, 'Polishing');
   try {
-    const prompt = `Polish this cover letter draft for an Australian job application.
+    const prompt = `TASK: Edit this cover letter draft. The applicant wrote it themselves.
 
 Return JSON only: {"paragraphs": [string]}
 
-What to do:
-- Fix spelling, grammar and flow, and tighten wordy sentences.
-- Keep the writer's own voice, structure and every fact. Don't add new claims.
-- Where the draft or the resume genuinely supports it, use the job ad's own keywords so ATS screening picks them up.
-- Aim for ${LETTER_LENGTH[L.length] || LETTER_LENGTH.standard}, but don't pad a short draft with made-up content.
-${LETTER_STYLE_RULES}
+This is an edit, not a rewrite:
+- Fix spelling, grammar and punctuation. Cut waffle and repetition. Smooth sentences that are awkward or hard to follow.
+- Swap any clichés or AI-sounding phrases for plain ones (see the list below).
+- Keep their word choices wherever they're fine. Keep their personality, their structure, their facts, and any natural quirks that sound like a real person. If a sentence is already good, leave it alone.
+- Don't make it more formal, more flowery or more impressive than they wrote it. Contractions are fine.
+- Where the resume genuinely supports it, work in the job ad's own terms so ATS screening picks them up, inside normal sentences.
+- Aim for ${LETTER_LENGTH[L.length] || LETTER_LENGTH.standard}, but never pad a short draft with made-up content.
+
+${LETTER_RULES}
+
+${VOICE_GUIDE}
 
 Job title: ${L.jobTitle || '(not given)'}
 Company: ${L.company || '(not given)'}
@@ -1365,7 +1478,7 @@ Job ad:
 ${L.ad || '(not given)'}
 ----
 
-Applicant's resume (for fact checking only):
+Applicant's resume (for checking facts only):
 ${resumeContext()}
 
 Draft:
@@ -1373,8 +1486,9 @@ Draft:
 ${L.body}
 ----`;
     const out = parseJSON(await callGemini([{ text: prompt }], { json: true, temperature: 0.4 }));
-    const paras = cleanParas(Array.isArray(out) ? out : out.paragraphs);
+    let paras = cleanParas(Array.isArray(out) ? out : out.paragraphs);
     if (!paras.length) throw new Error('The AI didn\'t return a letter. Try again.');
+    paras = await fixTells(paras, resumeContext() + ' ' + L.ad, 'the paragraphs of a cover letter');
     L.body = paras.join('\n\n');
     renderFields(); changed();
     toast('Letter polished.');
@@ -1521,7 +1635,7 @@ Rules:
 - "state" is an Australian state abbreviation (WA, NSW, VIC, QLD, SA, TAS, ACT, NT) if one is given, otherwise "".
 - Dates as "Mon YYYY" (e.g. "Mar 2021") or just "YYYY" if that's all that's given.
 - If a job is ongoing ("Present", "Current", "Now"), set "current": true and "end": "".
-- Put each duty or achievement as its own string, without bullet symbols.
+- Put each duty or achievement as its own string, without bullet symbols, in the person's original wording. Don't rewrite or improve it.
 - List jobs newest first. Include volunteer roles and apprenticeships as jobs.
 - Put licences, tickets and certificates in "education".
 Return the JSON only.`;
